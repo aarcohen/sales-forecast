@@ -508,16 +508,33 @@ function renderStageGrid(stageMap) {
 
 function renderStageTbl(stageMap) {
   const body = $('saBody'); body.innerHTML = '';
-  Object.values(stageMap).sort((a,b) => (a.pipeline !== b.pipeline ? (a.pipeline === 'sales' ? -1 : 1) : b.prob - a.prob)).forEach(s => {
+  const allVals = Object.values(stageMap);
+
+  // Sales stages — one row each, sorted by prob desc
+  allVals.filter(s => s.pipeline === 'sales').sort((a,b) => b.prob - a.prob).forEach(s => {
     const color = s.prob>=.7?'#059669':s.prob>=.4?'#d97706':'#6b7280';
     const bg = s.prob>=.7?'#ecfdf5':s.prob>=.4?'#fffbeb':'#f3f4f6';
-    const tag = s.pipeline==='onhold'?' <span style="font-size:9px;background:#f5f3ff;color:#7c3aed;padding:1px 4px;border-radius:3px;font-weight:700">HOLD</span>':'';
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td style="font-weight:500">${s.name}${tag}</td><td>${s.count}</td><td>${fmt(s.total)}</td>
+    tr.innerHTML = `<td style="font-weight:500">${s.name}</td><td>${s.count}</td><td>${fmt(s.total)}</td>
       <td><span class="pill" style="background:${bg};color:${color}">${fmtPct(s.prob)}</span></td>
       <td style="color:var(--t2)">${fmt(HIST.avgDeal*s.prob)}</td>`;
     body.appendChild(tr);
   });
+
+  // On-Hold — single combined row
+  const ohStages = allVals.filter(s => s.pipeline === 'onhold');
+  if (ohStages.length) {
+    const ohTotal = ohStages.reduce((a,b)=>a+b.total,0);
+    const ohCount = ohStages.reduce((a,b)=>a+b.count,0);
+    const ohWeighted = ohStages.reduce((a,b)=>a+b.total*b.prob,0);
+    const ohWinRate = ohTotal > 0 ? ohWeighted/ohTotal : 0;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td style="font-weight:500">On-Hold Pipeline <span style="font-size:9px;background:#f5f3ff;color:#7c3aed;padding:1px 4px;border-radius:3px;font-weight:700">HOLD</span></td>
+      <td>${ohCount}</td><td>${fmt(ohTotal)}</td>
+      <td><span class="pill" style="background:#f3f4f6;color:#6b7280">${fmtPct(ohWinRate)}</span></td>
+      <td style="color:var(--t2)">${fmt(ohWeighted)}</td>`;
+    body.appendChild(tr);
+  }
 }
 
 function renderQuarters(by) {
@@ -581,7 +598,7 @@ function renderChart(by) {
       interaction:{ mode:'index', intersect:false },
       scales: {
         x: { stacked:true, grid:{ display:false }, ticks:{ font:{ size:11 } } },
-        y: { stacked:true, grid:{ color:'#f3f4f6' }, ticks:{ font:{ size:11 }, callback:v=>'$'+(v>=1000?(v/1000).toFixed(0)+'K':v) } }
+        y: { stacked:false, grid:{ color:'#f3f4f6' }, ticks:{ font:{ size:11 }, callback:v=>'$'+(v>=1000?(v/1000).toFixed(0)+'K':v) } }
       },
       plugins: {
         legend:{ display:false },

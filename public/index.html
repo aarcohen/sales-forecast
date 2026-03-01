@@ -239,7 +239,7 @@ body { font-family: 'Segoe UI',-apple-system,BlinkMacSystemFont,system-ui,sans-s
     <div class="info-note">
       <strong>Demos Needed</strong> = Gap vs forecast ÷ ~$<span id="demoVal">6,539</span>/demo (avg deal $19,233 × 34% win rate). &nbsp;·&nbsp;
       <strong>Pipeline weighted</strong> = Sales + On-Hold deals × stage probability, by expected close date. &nbsp;·&nbsp;
-      <strong>Current-month deals</strong> only count toward the current month if their avg-cycle-based close (createdate + avg days) also falls in the current month — roughly deals created in the prior ~30-day window. All others (overdue or too early in cycle) move to April.
+      <strong>Current-month deals</strong> stay in the current month only if createdate + avg cycle also lands this month. Too-new deals go to their exact future month; overdue deals (cycle expired) spread evenly across Q2 (Apr–Jun).
     </div>
   </div>
 
@@ -482,12 +482,16 @@ function buildMonthly() {
   const futureMonths = MONTHS.filter(m => m > NOW_MONTH);
   const futureCount = futureMonths.length;
 
-  const nextMonthKey = futureMonths[0]; // April — where displaced March deals land
+  // Q2 months — overdue March deals spread here (nearest realistic horizon)
+  const q2Months = ['2026-04', '2026-05', '2026-06'];
 
-  // For deals dated in the current month: only stay in March if createdate + avgDays
-  // also lands in March (the deal is mid-cycle right now).
-  // Overdue deals (cycle expired) AND too-new deals BOTH go to April specifically.
-  // Future-dated deals are trusted as-is. No-date/past-date deals spread across Apr-Dec.
+  // For current-month-dated deals, three cases:
+  //  1. createdate + avgDays lands in March → keep in March (deal is genuinely on track)
+  //  2. createdate + avgDays > March (too new) → assign to that specific future month
+  //     (e.g. created Feb 20 + 43d = April → April; created Feb 28 + 43d = mid-April → April)
+  //  3. createdate + avgDays < March (overdue — cycle already expired) → spread evenly
+  //     across Q2 (April, May, June) as the nearest defensible horizon
+  // Future-dated deals trusted as-is. No-date/past-date deals spread across Apr–Dec.
   function assignMonth(deal) {
     const ecd = deal.properties.expected_close_date;
     const ecdMonth = ecd ? ecd.substring(0, 7) : null;
@@ -497,32 +501,33 @@ function buildMonthly() {
 
     // ecdMonth === NOW_MONTH: validate with avg cycle
     const createDate = new Date(deal.properties.createdate);
-    if (!createDate || isNaN(createDate.getTime())) return null;
+    if (!createDate || isNaN(createDate.getTime())) return 'Q2_SPREAD';
     const realisticClose = new Date(createDate.getTime() + HIST.avgDays * 86400000);
     const rcMonth = realisticClose.getFullYear() + '-' + String(realisticClose.getMonth()+1).padStart(2,'0');
-    // Keep in March ONLY if the avg cycle also puts the close in March
-    // (createdate roughly Jan 17 – Feb 16 for a 43-day cycle)
-    // Everything else — overdue deals and too-new deals alike — goes to April
-    return rcMonth === NOW_MONTH ? NOW_MONTH : nextMonthKey;
+
+    if (rcMonth === NOW_MONTH) return NOW_MONTH;                        // case 1: on track for March
+    if (rcMonth > NOW_MONTH) return rcMonth <= '2026-12' ? rcMonth : null; // case 2: specific future month
+    return 'Q2_SPREAD';                                                 // case 3: overdue → spread Q2
   }
 
   sales.forEach(d => {
     const m = assignMonth(d);
-    const amt = parseFloat(d.properties.amount || 0);
-    const w = amt * getProb(d);
-    if (m && by[m]) {
+    const w = parseFloat(d.properties.amount || 0) * getProb(d);
+    if (m === 'Q2_SPREAD') {
+      q2Months.forEach(fm => { by[fm].salesW += w / 3; });
+    } else if (m && by[m]) {
       by[m].salesW += w;
     } else {
-      // No date, past date, or pushed beyond Dec — spread evenly
       futureMonths.forEach(fm => { by[fm].salesW += w / futureCount; });
     }
   });
 
   onhold.forEach(d => {
     const m = assignMonth(d);
-    const amt = parseFloat(d.properties.amount || 0);
-    const w = amt * getProb(d);
-    if (m && by[m]) {
+    const w = parseFloat(d.properties.amount || 0) * getProb(d);
+    if (m === 'Q2_SPREAD') {
+      q2Months.forEach(fm => { by[fm].onholdW += w / 3; });
+    } else if (m && by[m]) {
       by[m].onholdW += w;
     } else {
       futureMonths.forEach(fm => { by[fm].onholdW += w / futureCount; });

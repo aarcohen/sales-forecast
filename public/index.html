@@ -123,6 +123,14 @@ body { font-family: 'Segoe UI',-apple-system,BlinkMacSystemFont,system-ui,sans-s
 .calc-res-det { font-size:12px; color:#60a5fa; margin-top:3px; }
 .cg { margin-bottom:10px; }
 
+/* DEMO 3-GRID */
+.demo-3grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+@media(max-width:1000px){ .demo-3grid { grid-template-columns:1fr 1fr; } }
+@media(max-width:640px){ .demo-3grid { grid-template-columns:1fr; } }
+.auto-row { display:flex; justify-content:space-between; align-items:center; font-size:13px; color:var(--t2); padding:6px 0; border-bottom:1px solid var(--border); }
+.auto-row:last-of-type { border-bottom:none; }
+.auto-row span:last-child { font-weight:600; color:var(--t1); }
+
 /* LOADING */
 .loading { position:fixed; inset:0; background:rgba(255,255,255,.88); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:1000; gap:14px; }
 .spinner { width:32px; height:32px; border:3px solid #e5e7eb; border-top-color:var(--primary); border-radius:50%; animation:spin .8s linear infinite; }
@@ -225,27 +233,53 @@ body { font-family: 'Segoe UI',-apple-system,BlinkMacSystemFont,system-ui,sans-s
     </div>
   </div>
 
-  <!-- Demo Gap Calculator -->
-  <div class="card">
-    <div class="sec-hdr">Demo Gap Calculator</div>
-    <div class="calc-grid">
-      <div>
-        <div class="cg"><label class="calc-lbl">Revenue Gap ($)</label><input type="number" class="calc-inp" id="cGap" placeholder="e.g. 200000" oninput="calcUpdate()"></div>
-        <div class="cg"><label class="calc-lbl">Avg Deal Size ($)</label><input type="number" class="calc-inp" id="cDeal" oninput="calcUpdate()"></div>
-        <div class="cg"><label class="calc-lbl">Demo → Close Win Rate (%)</label><input type="number" class="calc-inp" id="cRate" oninput="calcUpdate()"></div>
+  <!-- Demo Gap Calculators -->
+  <div class="demo-3grid">
+
+    <!-- Auto: vs Internal Forecast -->
+    <div class="card">
+      <div class="sec-hdr">Gap vs Internal Forecast <span style="font-size:10px;font-weight:400;color:var(--t3)">auto-calculated</span></div>
+      <div class="auto-row"><span>Full-Year Target</span><span id="aIntTarget">--</span></div>
+      <div class="auto-row"><span>Actual + Wtd. Pipeline</span><span id="aIntCurrent">--</span></div>
+      <div class="auto-row" style="padding-top:8px"><span style="font-weight:600;color:var(--t1)">Gap</span><span id="aIntGapLbl" style="font-size:15px">--</span></div>
+      <div class="calc-result" style="margin-top:12px">
+        <div class="calc-res-lbl">Demos Needed to Close Gap</div>
+        <div class="calc-res-val" id="aIntDemos">--</div>
+        <div class="calc-res-det" id="aIntDet">--</div>
       </div>
-      <div>
-        <div class="calc-result">
-          <div class="calc-res-lbl">Demos Needed to Close Gap</div>
-          <div class="calc-res-val" id="cResult">--</div>
-          <div class="calc-res-det" id="cDet">Enter a gap amount above</div>
-        </div>
-        <div class="info-note" style="margin-top:10px;">
-          <strong>Value per demo:</strong> $<span id="cPerDemo">--</span><br>
-          <strong>Expected close timeline:</strong> ~<span id="cDays">174</span> days from demo booked
-        </div>
+      <div class="info-note" style="margin-top:10px">$<span id="aIntPerDemo">--</span>/demo · ~174 days avg close</div>
+    </div>
+
+    <!-- Auto: vs External Forecast -->
+    <div class="card">
+      <div class="sec-hdr">Gap vs External Forecast <span style="font-size:10px;font-weight:400;color:var(--t3)">auto-calculated</span></div>
+      <div class="auto-row"><span>Full-Year Target</span><span id="aExtTarget">--</span></div>
+      <div class="auto-row"><span>Actual + Wtd. Pipeline</span><span id="aExtCurrent">--</span></div>
+      <div class="auto-row" style="padding-top:8px"><span style="font-weight:600;color:var(--t1)">Gap</span><span id="aExtGapLbl" style="font-size:15px">--</span></div>
+      <div class="calc-result" style="margin-top:12px">
+        <div class="calc-res-lbl">Demos Needed to Close Gap</div>
+        <div class="calc-res-val" id="aExtDemos">--</div>
+        <div class="calc-res-det" id="aExtDet">--</div>
+      </div>
+      <div class="info-note" style="margin-top:10px">$<span id="aExtPerDemo">--</span>/demo · ~174 days avg close</div>
+    </div>
+
+    <!-- Manual Calculator -->
+    <div class="card">
+      <div class="sec-hdr">Manual Calculator</div>
+      <div class="cg"><label class="calc-lbl">Revenue Gap ($)</label><input type="number" class="calc-inp" id="cGap" placeholder="e.g. 200000" oninput="calcUpdate()"></div>
+      <div class="cg"><label class="calc-lbl">Avg Deal Size ($)</label><input type="number" class="calc-inp" id="cDeal" oninput="calcUpdate()"></div>
+      <div class="cg"><label class="calc-lbl">Demo → Close Win Rate (%)</label><input type="number" class="calc-inp" id="cRate" oninput="calcUpdate()"></div>
+      <div class="calc-result" style="margin-top:4px">
+        <div class="calc-res-lbl">Demos Needed to Close Gap</div>
+        <div class="calc-res-val" id="cResult">--</div>
+        <div class="calc-res-det" id="cDet">Enter a gap amount above</div>
+      </div>
+      <div class="info-note" style="margin-top:10px">
+        <strong>Value per demo:</strong> $<span id="cPerDemo">--</span> · ~<span id="cDays">174</span> days to close
       </div>
     </div>
+
   </div>
 </div>
 
@@ -670,6 +704,42 @@ function renderTable(by) {
 }
 
 // ============================================================
+// AUTO DEMO CALCS
+// ============================================================
+function renderDemoCalcs(by) {
+  const demoVal = HIST.avgDeal * HIST.engagedProb;
+  const intTotal = Object.values(INTERNAL_FORECAST).reduce((a,b)=>a+b,0);
+  const extTotal = Object.values(EXTERNAL_FORECAST).reduce((a,b)=>a+b,0);
+
+  let totalActual = 0, totalPipeline = 0;
+  MONTHS.forEach(m => {
+    totalActual += by[m].actualWon;
+    totalPipeline += by[m].salesW + by[m].onholdW;
+  });
+  const totalCombined = totalActual + totalPipeline;
+
+  function fillAutoCalc(prefix, target, combined) {
+    const gap = target - combined;
+    const demos = gap > 0 ? Math.ceil(gap / demoVal) : 0;
+    $(prefix+'Target').textContent = fmt(target);
+    $(prefix+'Current').textContent = fmt(combined);
+    const gapEl = $(prefix+'GapLbl');
+    gapEl.textContent = (gap > 0 ? '-' : '+') + fmt(Math.abs(gap));
+    gapEl.style.color = gap > 0 ? 'var(--red)' : 'var(--green)';
+    const demosEl = $(prefix+'Demos');
+    demosEl.textContent = gap > 0 ? demos : '✓';
+    demosEl.style.color = gap > 0 ? 'var(--blue)' : 'var(--green)';
+    $(prefix+'Det').textContent = gap > 0
+      ? `${fmt(gap)} gap ÷ ${fmt(demoVal)}/demo = ${demos} demos`
+      : 'Ahead of target — no demos needed';
+    $(prefix+'PerDemo').textContent = Math.round(demoVal).toLocaleString();
+  }
+
+  fillAutoCalc('aInt', intTotal, totalCombined);
+  fillAutoCalc('aExt', extTotal, totalCombined);
+}
+
+// ============================================================
 // CALC
 // ============================================================
 function calcUpdate() {
@@ -704,6 +774,7 @@ function renderAll() {
   renderQuarters(by);
   renderChart(by);
   renderTable(by);
+  renderDemoCalcs(by);
   $('ts').textContent = 'Updated ' + new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
 }
 

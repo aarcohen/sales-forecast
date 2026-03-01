@@ -1,0 +1,6 @@
+{
+  "name": "sales-forecast",
+  "version": "1.0.0",
+  "description": "BenefitFlow Sales Forecast Dashboard",
+  "engines": { "node": ">=18" }
+}

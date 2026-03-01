@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sales Forecast — BenefitFlow</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --primary: #0052CC; --primary-dark: #003E99;
+  --bg: #f5f7fa; --card: #fff; --border: #e5e7eb;
+  --t1: #1a1a2e; --t2: #6b7280; --t3: #9ca3af;
+  --green: #059669; --green-bg: #ecfdf5;
+  --yellow: #d97706; --yellow-bg: #fffbeb;
+  --red: #dc2626; --red-bg: #fef2f2;
+  --blue: #2563eb; --blue-bg: #eff6ff;
+  --purple: #7c3aed; --purple-bg: #f5f3ff;
+  --r: 8px; --rl: 12px;
+  --sh: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+}
+body { font-family: 'Segoe UI',-apple-system,BlinkMacSystemFont,system-ui,sans-serif; background:var(--bg); color:var(--t1); line-height:1.5; min-height:100vh; }
+
+/* HEADER */
+.hdr { background:var(--card); border-bottom:1px solid var(--border); padding:14px 28px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; box-shadow:0 1px 2px rgba(0,0,0,0.04); }
+.hdr-l { display:flex; align-items:center; gap:14px; }
+.logo { width:34px; height:34px; background:var(--primary); border-radius:8px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:15px; }
+.hdr-title { font-size:18px; font-weight:700; }
+.hdr-sub { font-size:12px; color:var(--t2); }
+.hdr-r { display:flex; align-items:center; gap:10px; }
+.btn { padding:7px 14px; border:1px solid var(--border); border-radius:var(--r); font-size:13px; font-family:inherit; font-weight:500; cursor:pointer; background:#fff; color:var(--t1); transition:all .15s; display:inline-flex; align-items:center; gap:5px; }
+.btn:hover { border-color:var(--primary); color:var(--primary); }
+.btn-primary { background:var(--primary); color:#fff; border-color:var(--primary); }
+.btn-primary:hover { background:var(--primary-dark); border-color:var(--primary-dark); color:#fff; }
+.ts { font-size:12px; color:var(--t3); }
+@keyframes spin { to { transform:rotate(360deg); } }
+.spinning .spin-icon { animation:spin .8s linear infinite; display:inline-block; }
+
+/* MAIN */
+.main { padding:24px 28px; max-width:1440px; margin:0 auto; }
+
+/* SECTION HEADER */
+.sec-hdr { font-size:14px; font-weight:600; color:var(--t1); margin-bottom:10px; display:flex; align-items:center; gap:8px; }
+
+/* CARDS */
+.card { background:var(--card); border:1px solid var(--border); border-radius:var(--rl); padding:20px; box-shadow:var(--sh); }
+.gap16 { margin-bottom:16px; }
+.gap24 { margin-bottom:24px; }
+
+/* KPIs */
+.kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:14px; margin-bottom:20px; }
+.kpi { background:var(--card); border:1px solid var(--border); border-radius:var(--rl); padding:18px 20px; box-shadow:var(--sh); }
+.kpi-lbl { font-size:11px; font-weight:600; color:var(--t3); text-transform:uppercase; letter-spacing:.5px; margin-bottom:5px; }
+.kpi-val { font-size:24px; font-weight:700; }
+.kpi-sub { font-size:12px; color:var(--t2); margin-top:3px; }
+
+/* METHODOLOGY */
+.method-bar { background:var(--blue-bg); border:1px solid #bfdbfe; border-radius:var(--r); padding:12px 16px; margin-bottom:20px; font-size:13px; color:var(--blue); display:flex; gap:10px; align-items:flex-start; }
+
+/* PIPELINE TABS */
+.tabs { display:flex; gap:2px; background:#f3f4f6; border-radius:var(--r); padding:3px; width:fit-content; margin-bottom:16px; }
+.tab { padding:7px 18px; border-radius:6px; font-size:13px; font-weight:500; cursor:pointer; color:var(--t2); transition:all .15s; border:none; background:transparent; font-family:inherit; }
+.tab.active { background:#fff; color:var(--t1); box-shadow:0 1px 2px rgba(0,0,0,.1); font-weight:600; }
+
+/* STAGE GRID */
+.stage-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:20px; }
+.stage-card { background:var(--card); border:1px solid var(--border); border-radius:var(--r); padding:14px 16px; }
+.stage-name { font-size:11px; font-weight:600; color:var(--t3); text-transform:uppercase; letter-spacing:.4px; margin-bottom:5px; }
+.stage-cnt { font-size:20px; font-weight:700; }
+.stage-amt { font-size:13px; color:var(--t2); margin-top:1px; }
+.stage-prob { font-size:11px; color:var(--t3); margin-top:4px; }
+.stage-bar { height:3px; background:#e5e7eb; border-radius:2px; margin-top:8px; }
+.stage-bar-fill { height:100%; border-radius:2px; }
+
+/* 2-col */
+.two-col { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; }
+@media(max-width:900px) { .two-col { grid-template-columns:1fr; } }
+.chart-wrap { position:relative; height:280px; }
+
+/* QUARTERLY */
+.q-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
+@media(max-width:800px) { .q-grid { grid-template-columns:1fr 1fr; } }
+.q-card { background:var(--card); border:1px solid var(--border); border-radius:var(--r); padding:14px 16px; }
+.q-lbl { font-size:11px; font-weight:600; color:var(--t3); text-transform:uppercase; letter-spacing:.4px; margin-bottom:6px; }
+.q-target { font-size:12px; color:var(--t2); margin-bottom:3px; }
+.q-val { font-size:18px; font-weight:700; margin-bottom:3px; }
+.q-badge { display:inline-block; font-size:11px; font-weight:600; padding:2px 6px; border-radius:4px; margin-bottom:7px; }
+.q-badge.ok { background:var(--green-bg); color:var(--green); }
+.q-badge.risk { background:var(--yellow-bg); color:var(--yellow); }
+.q-badge.behind { background:var(--red-bg); color:var(--red); }
+.q-prog { height:5px; background:#e5e7eb; border-radius:3px; overflow:hidden; }
+.q-prog-fill { height:100%; border-radius:3px; }
+.q-prog-fill.ok { background:var(--green); }
+.q-prog-fill.risk { background:var(--yellow); }
+.q-prog-fill.behind { background:var(--red); }
+.q-note { font-size:11px; color:var(--t2); margin-top:7px; }
+
+/* FORECAST TABLE */
+.tbl-wrap { overflow-x:auto; }
+.tbl { width:100%; border-collapse:collapse; font-size:13px; }
+.tbl th { padding:9px 11px; text-align:left; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; color:var(--t3); border-bottom:2px solid var(--border); background:#f9fafb; white-space:nowrap; }
+.tbl td { padding:9px 11px; border-bottom:1px solid var(--border); vertical-align:middle; }
+.tbl tr:last-child td { border-bottom:none; }
+.tbl tr.now td { background:#eff6ff; }
+.tbl tr.past td { background:#fafafa; color:var(--t2); }
+.tbl tr.qsub td { background:#f0fdf4; font-weight:600; font-size:12px; color:var(--green); border-top:2px solid #bbf7d0; }
+.t-inp { width:95px; padding:4px 7px; border:1px solid var(--border); border-radius:4px; font-size:13px; font-family:inherit; }
+.t-inp:focus { outline:none; border-color:var(--primary); }
+.pos { color:var(--green); font-weight:600; }
+.neg { color:var(--red); font-weight:600; }
+.neu { color:var(--t2); }
+
+/* DEMO CALC */
+.calc-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+@media(max-width:700px){ .calc-grid { grid-template-columns:1fr; } }
+.calc-lbl { font-size:12px; color:var(--t2); font-weight:500; margin-bottom:4px; display:block; }
+.calc-inp { width:100%; padding:8px 11px; border:1px solid var(--border); border-radius:var(--r); font-size:13px; font-family:inherit; }
+.calc-inp:focus { outline:none; border-color:var(--primary); }
+.calc-result { background:var(--blue-bg); border:1px solid #bfdbfe; border-radius:var(--r); padding:16px; }
+.calc-res-lbl { font-size:12px; color:var(--blue); font-weight:500; margin-bottom:3px; }
+.calc-res-val { font-size:28px; font-weight:700; color:var(--blue); }
+.calc-res-det { font-size:12px; color:#60a5fa; margin-top:4px; }
+.cg { margin-bottom:12px; }
+
+/* STAGE ANALYTICS */
+.sa-tbl { width:100%; border-collapse:collapse; font-size:13px; }
+.sa-tbl th { padding:8px 11px; text-align:left; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; color:var(--t3); border-bottom:2px solid var(--border); background:#f9fafb; }
+.sa-tbl td { padding:9px 11px; border-bottom:1px solid var(--border); }
+.sa-tbl tr:last-child td { border-bottom:none; }
+.pill { display:inline-block; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600; }
+.info-note { background:#f9fafb; border:1px solid var(--border); border-radius:var(--r); padding:9px 13px; font-size:12px; color:var(--t2); margin-top:10px; }
+
+/* PIPELINE SOURCE LEGEND */
+.legend { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--t2); margin-bottom:10px; align-items:center; }
+.legend-dot { width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:4px; }
+
+/* LOADING */
+.loading { position:fixed; inset:0; background:rgba(255,255,255,.88); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:1000; gap:14px; }
+.spinner { width:34px; height:34px; border:3px solid #e5e7eb; border-top-color:var(--primary); border-radius:50%; animation:spin .8s linear infinite; }
+.load-txt { font-size:14px; color:var(--t2); }
+.err { background:var(--red-bg); border:1px solid #fca5a5; border-radius:var(--r); padding:10px 14px; color:var(--red); font-size:13px; margin-bottom:16px; display:none; }
+.err.show { display:block; }
+</style>
+</head>
+<body>
+
+<div class="loading" id="loading">
+  <div class="spinner"></div>
+  <div class="load-txt">Loading pipeline from HubSpot…</div>
+</div>
+
+<div class="hdr">
+  <div class="hdr-l">
+    <div class="logo">BF</div>
+    <div>
+      <div class="hdr-title">Sales Forecast</div>
+      <div class="hdr-sub">Pipeline-weighted · 2026 · Includes On-Hold pipeline</div>
+    </div>
+  </div>
+  <div class="hdr-r">
+    <span class="ts" id="ts"></span>
+    <button class="btn spinning" id="refreshBtn" onclick="refresh()">
+      <span class="spin-icon">&#8635;</span> Refresh
+    </button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="err" id="err"><strong>Error:</strong> <span id="errTxt"></span></div>
+
+  <!-- Methodology -->
+  <div class="method-bar">
+    <span style="font-size:15px;flex-shrink:0;">ℹ</span>
+    <div>
+      <strong>Methodology:</strong>
+      Weighted Forecast = Deal Amount × Stage Win Rate, spread by Expected Close Date.
+      Includes <strong>both Sales Pipeline and On-Hold Pipeline</strong> — on-hold deals use historically-calibrated reactivation + close probabilities.
+      Demo Gap = Revenue Shortfall ÷ (Avg Deal × Engaged Win Rate ≈ $6,539/demo).
+      Targets save in your browser.
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-lbl">Total Open Pipeline (Raw)</div><div class="kpi-val" id="kTotalRaw">--</div><div class="kpi-sub" id="kTotalDeals">-- deals</div></div>
+    <div class="kpi"><div class="kpi-lbl">Weighted 2026 Forecast</div><div class="kpi-val" id="kWeighted">--</div><div class="kpi-sub">Sales + On-Hold, probability-adjusted</div></div>
+    <div class="kpi"><div class="kpi-lbl">YTD Won (2026)</div><div class="kpi-val" id="kYTD">--</div><div class="kpi-sub" id="kYTDSub">-- deals closed</div></div>
+    <div class="kpi"><div class="kpi-lbl">2025 Monthly Run Rate</div><div class="kpi-val" id="kRunRate">--</div><div class="kpi-sub">Baseline (12-mo avg)</div></div>
+    <div class="kpi"><div class="kpi-lbl">Avg Deal Size (Won)</div><div class="kpi-val" id="kAvg">--</div><div class="kpi-sub" id="kDays">-- avg days to close</div></div>
+    <div class="kpi"><div class="kpi-lbl">Overall Win Rate</div><div class="kpi-val" id="kWR">--</div><div class="kpi-sub">Won ÷ (Won + Lost), 2025</div></div>
+  </div>
+
+  <!-- Pipeline source tabs -->
+  <div class="tabs">
+    <button class="tab active" id="tab-all" onclick="switchTab('all')">All Pipelines</button>
+    <button class="tab" id="tab-sales" onclick="switchTab('sales')">Sales Pipeline Only</button>
+    <button class="tab" id="tab-onhold" onclick="switchTab('onhold')">On-Hold Pipeline Only</button>
+  </div>
+
+  <!-- Stage Grid -->
+  <div class="sec-hdr">Current Open Pipeline by Stage</div>
+  <div class="stage-grid" id="stageGrid"></div>
+
+  <!-- Quarterly -->
+  <div class="sec-hdr">Quarterly Forecast vs Target — 2026</div>
+  <div class="q-grid" id="qGrid"></div>
+
+  <!-- Chart + Stage Analytics -->
+  <div class="two-col">
+    <div class="card">
+      <div class="sec-hdr">Monthly Forecast vs Target</div>
+      <div class="legend">
+        <span><span class="legend-dot" style="background:#059669;"></span>Actual Won</span>
+        <span><span class="legend-dot" style="background:#3b82f6;"></span>Sales Pipeline (weighted)</span>
+        <span><span class="legend-dot" style="background:#a78bfa;"></span>On-Hold (weighted)</span>
+        <span><span class="legend-dot" style="background:#dc2626;width:20px;height:2px;border-radius:0;"></span>Target</span>
+      </div>
+      <div class="chart-wrap"><canvas id="chart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="sec-hdr">Stage Conversion Rates</div>
+      <table class="sa-tbl" id="saTable">
+        <thead><tr><th>Stage</th><th>Pipeline</th><th>Deals</th><th>Win Rate</th><th>Expected Value/Deal</th></tr></thead>
+        <tbody id="saBody"></tbody>
+      </table>
+      <div class="info-note">
+        Sales Pipeline win rates = HubSpot stage probabilities (calibrated 2025).
+        On-Hold rates = reactivation probability × sales-stage close rate.
+        Overall 2025 win rate: <strong>30%</strong>.
+      </div>
+    </div>
+  </div>
+
+  <!-- Monthly Table -->
+  <div class="card gap24">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div class="sec-hdr" style="margin-bottom:0;">Monthly Forecast &amp; Target Tracker</div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" onclick="resetTargets()" style="font-size:12px;padding:5px 10px;">Reset</button>
+        <button class="btn btn-primary" onclick="saveTargets()" style="font-size:12px;padding:5px 10px;" id="saveBtn">Save Targets</button>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th>Target</th>
+            <th>Actual Won</th>
+            <th>Sales Pipeline (weighted)</th>
+            <th>On-Hold (weighted)</th>
+            <th>Total Forecast</th>
+            <th>Gap vs Target</th>
+            <th>Demos Needed</th>
+          </tr>
+        </thead>
+        <tbody id="tblBody"></tbody>
+      </table>
+    </div>
+    <div class="info-note">
+      <strong>Demos Needed</strong> = Gap ÷ $<span id="demoVal">6,539</span>/demo &nbsp;·&nbsp;
+      <strong>On-Hold</strong> deals use <em>reactivation rate × stage close rate</em> for probability.
+      Avg days to close: <strong id="daysDisplay">174</strong>.
+    </div>
+  </div>
+
+  <!-- Demo Gap Calculator -->
+  <div class="card gap24">
+    <div class="sec-hdr">Demo Gap Calculator</div>
+    <div class="calc-grid">
+      <div>
+        <div class="cg"><label class="calc-lbl">Revenue Gap ($)</label><input type="number" class="calc-inp" id="cGap" placeholder="e.g. 150000" oninput="calcUpdate()"></div>
+        <div class="cg"><label class="calc-lbl">Avg Deal Size ($)</label><input type="number" class="calc-inp" id="cDeal" oninput="calcUpdate()"></div>
+        <div class="cg"><label class="calc-lbl">Demo Win Rate (%) — Engaged Deal stage</label><input type="number" class="calc-inp" id="cRate" oninput="calcUpdate()"></div>
+      </div>
+      <div>
+        <div class="calc-result">
+          <div class="calc-res-lbl">Demos Needed to Close Gap</div>
+          <div class="calc-res-val" id="cResult">--</div>
+          <div class="calc-res-det" id="cDet">Enter a gap amount above</div>
+        </div>
+        <div class="info-note" style="margin-top:10px;">
+          <strong>Formula:</strong> Demos = Gap ÷ (Deal Size × Win Rate)<br>
+          <strong>Value per demo:</strong> $<span id="cPerDemo">--</span><br>
+          <strong>Close timeline:</strong> ~<span id="cDays">174</span> days from demo booked
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CONSTANTS
+// ============================================================
+const BASE_URL = '/api';
+
+// Sales Pipeline stage IDs → names + win rates
+const SALES_STAGES = {
+  '215276379': { name:'Open Deal',              prob:0.18, color:'#94a3b8' },
+  '220338057': { name:'Engaged Deal',           prob:0.34, color:'#60a5fa' },
+  '1295297626':{ name:'Trial in Progress',      prob:0.45, color:'#34d399' },
+  '215276380': { name:'Decision Maker Buy-In',  prob:0.64, color:'#a78bfa' },
+  '215276381': { name:'Negotiation/Pricing',    prob:0.76, color:'#f59e0b' },
+  'contractsent':{ name:'Contract Review',      prob:0.93, color:'#10b981' }
+};
+
+// On-Hold Pipeline stage IDs → names + effective close probabilities
+// Probability = estimated reactivation rate × average close rate for reactivated deals
+// Reactivation rate is lower for earlier stages; higher for later (close-to-renewal)
+const ONHOLD_STAGES = {
+  '49229958': { name:'Onboarding Call Needed', prob:0.50, color:'#c084fc', pipeline:'onhold' }, // active customers about to start
+  '48047015': { name:'4–7 Mo Until Renewal',   prob:0.22, color:'#f0abfc', pipeline:'onhold' },
+  '50036082': { name:'Auto Renews 1–3 Mo',      prob:0.70, color:'#e879f9', pipeline:'onhold' },
+  '48045191': { name:'Contract Exp 1–3 Mo',     prob:0.35, color:'#d946ef', pipeline:'onhold' },
+  '50036084': { name:'Contract Exp <1 Mo',      prob:0.45, color:'#a21caf', pipeline:'onhold' },
+  '50036083': { name:'Auto Renews <1 Mo',       prob:0.72, color:'#86198f', pipeline:'onhold' },
+  '48045192': { name:'Closed Won (Renewal)',    prob:1.00, color:'#059669', pipeline:'onhold' },
+  '48045193': { name:'Closed Lost (Renewal)',   prob:0.00, color:'#dc2626', pipeline:'onhold' },
+  '171385759': { name:'Follow Up',              prob:0.18, color:'#fb923c', pipeline:'onhold' },
+  '171384698': { name:'1 Month',               prob:0.25, color:'#fb923c', pipeline:'onhold' },
+  '171384699': { name:'2 Months',              prob:0.22, color:'#f97316', pipeline:'onhold' },
+  '171384700': { name:'3 Months',              prob:0.20, color:'#ea580c', pipeline:'onhold' },
+  '171384701': { name:'4 Months',              prob:0.18, color:'#c2410c', pipeline:'onhold' },
+  '171384702': { name:'5 Months',              prob:0.16, color:'#9a3412', pipeline:'onhold' },
+  '171384703': { name:'6 Months',              prob:0.14, color:'#7c2d12', pipeline:'onhold' },
+  '204182442': { name:'No Follow Up Task',     prob:0.08, color:'#9ca3af', pipeline:'onhold' },
+  '172962924': { name:'Lost (On-Hold)',         prob:0.00, color:'#dc2626', pipeline:'onhold' }
+};
+
+// 2025 monthly actuals (from HubSpot historical pull)
+const HIST_2025 = {
+  '2025-01':309071,'2025-02':218820,'2025-03':373522,'2025-04':302030,
+  '2025-05':434310,'2025-06':417690,'2025-07':182824,'2025-08':99204,
+  '2025-09':194982,'2025-10':240382,'2025-11':289852,'2025-12':354809
+};
+
+const HIST = { avgDeal:19233, medianDeal:14988, avgDays:174, winRate:0.30, engagedProb:0.34 };
+
+const MONTHS = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06',
+                '2026-07','2026-08','2026-09','2026-10','2026-11','2026-12'];
+const MLBL = m => ({ '01':'Jan','02':'Feb','03':'Mar','04':'Apr','05':'May','06':'Jun',
+                      '07':'Jul','08':'Aug','09':'Sep','10':'Oct','11':'Nov','12':'Dec' }[m.split('-')[1]] + ' ' + m.split('-')[0]);
+const NOW_MONTH = '2026-03';
+
+const DEFAULT_TARGETS = {
+  '2026-01':300000,'2026-02':300000,'2026-03':320000,'2026-04':320000,
+  '2026-05':350000,'2026-06':350000,'2026-07':300000,'2026-08':280000,
+  '2026-09':300000,'2026-10':330000,'2026-11':330000,'2026-12':360000
+};
+
+const TGT_KEY = 'bf_sf_targets_2026';
+const ALL_STAGE_IDS = Object.fromEntries([...Object.entries(SALES_STAGES),...Object.entries(ONHOLD_STAGES)]);
+
+// ============================================================
+// STATE
+// ============================================================
+let salesDeals = [], onholdDeals = [], wonDeals = [];
+let targets = {};
+let chart = null;
+let activeTab = 'all';
+
+// ============================================================
+// API
+// ============================================================
+async function searchAll(filterGroups, props, maxPages=20) {
+  let results = [], after = 0;
+  for (let p = 0; p < maxPages; p++) {
+    const r = await fetch(`${BASE_URL}/crm/v3/objects/deals/search`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ filterGroups, properties:props, limit:100, after })
+    });
+    if (!r.ok) throw new Error(`HubSpot ${r.status}: ${r.statusText}`);
+    const d = await r.json();
+    if (d.results) results = results.concat(d.results);
+    if (d.paging?.next?.after) after = d.paging.next.after; else break;
+  }
+  return results;
+}
+
+const DEAL_PROPS = ['dealname','dealstage','amount','expected_close_date','closedate',
+                    'hs_deal_stage_probability','hubspot_owner_id','createdate','pipeline'];
+
+async function loadData() {
+  const [s, o, w] = await Promise.all([
+    // Open Sales Pipeline
+    searchAll([{filters:[
+      {propertyName:'pipeline',operator:'EQ',value:'default'},
+      {propertyName:'dealstage',operator:'NOT_IN',values:['closedwon','closedlost']}
+    ]}], DEAL_PROPS),
+    // On-Hold Pipeline (all stages except closed)
+    searchAll([{filters:[
+      {propertyName:'pipeline',operator:'EQ',value:'19702358'},
+      {propertyName:'dealstage',operator:'NOT_IN',values:['48045192','48045193','172962924']}
+    ]}], DEAL_PROPS),
+    // 2026 Won deals
+    searchAll([{filters:[
+      {propertyName:'dealstage',operator:'EQ',value:'closedwon'},
+      {propertyName:'closedate',operator:'GTE',value:'2026-01-01'}
+    ]}], ['dealname','amount','closedate','pipeline'])
+  ]);
+  salesDeals = s; onholdDeals = o; wonDeals = w;
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+const $ = id => document.getElementById(id);
+const fmt = n => n == null || isNaN(n) ? '--' : n >= 1e6 ? '$'+(n/1e6).toFixed(2)+'M' : '$'+Math.round(n).toLocaleString();
+const fmtPct = n => (n*100).toFixed(0)+'%';
+const fmtNum = n => Math.round(n).toLocaleString();
+
+function getProb(deal) {
+  const hs = parseFloat(deal.properties.hs_deal_stage_probability || 0);
+  if (hs > 0) return hs;
+  const s = ALL_STAGE_IDS[deal.properties.dealstage];
+  return s ? s.prob : 0;
+}
+
+function getCloseMonth(deal) {
+  const p = deal.properties;
+  const d = p.expected_close_date || p.closedate;
+  if (!d) return null;
+  const dt = new Date(d);
+  return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');
+}
+
+function getDeals() {
+  if (activeTab === 'sales') return { sales: salesDeals, onhold: [] };
+  if (activeTab === 'onhold') return { sales: [], onhold: onholdDeals };
+  return { sales: salesDeals, onhold: onholdDeals };
+}
+
+// ============================================================
+// PROCESS
+// ============================================================
+function buildMonthly() {
+  const { sales, onhold } = getDeals();
+  const byMonth = {};
+  MONTHS.forEach(m => { byMonth[m] = { salesRaw:0, salesW:0, onholdRaw:0, onholdW:0, actualWon:0, wonDeals:0 }; });
+
+  sales.forEach(d => {
+    const m = getCloseMonth(d); if (!m || !byMonth[m]) return;
+    const amt = parseFloat(d.properties.amount || 0);
+    const prob = getProb(d);
+    byMonth[m].salesRaw += amt;
+    byMonth[m].salesW += amt * prob;
+  });
+
+  onhold.forEach(d => {
+    const m = getCloseMonth(d); if (!m || !byMonth[m]) return;
+    const amt = parseFloat(d.properties.amount || 0);
+    const prob = getProb(d);
+    byMonth[m].onholdRaw += amt;
+    byMonth[m].onholdW += amt * prob;
+  });
+
+  wonDeals.forEach(d => {
+    const p = d.properties;
+    if (!p.amount || !p.closedate) return;
+    const dt = new Date(p.closedate);
+    const m = dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0');
+    if (byMonth[m]) { byMonth[m].actualWon += parseFloat(p.amount); byMonth[m].wonDeals++; }
+  });
+
+  return byMonth;
+}
+
+function buildStages() {
+  const { sales, onhold } = getDeals();
+  const map = {};
+
+  sales.forEach(d => {
+    const p = d.properties;
+    const info = SALES_STAGES[p.dealstage];
+    if (!info) return;
+    const k = info.name + '|sales';
+    if (!map[k]) map[k] = { name:info.name, color:info.color, prob:info.prob, pipeline:'sales', count:0, total:0 };
+    map[k].count++; map[k].total += parseFloat(p.amount || 0);
+  });
+
+  onhold.forEach(d => {
+    const p = d.properties;
+    const info = ONHOLD_STAGES[p.dealstage];
+    if (!info || info.prob === 0) return;
+    const k = info.name + '|onhold';
+    if (!map[k]) map[k] = { name:info.name, color:info.color, prob:info.prob, pipeline:'onhold', count:0, total:0 };
+    map[k].count++; map[k].total += parseFloat(p.amount || 0);
+  });
+
+  return map;
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+function renderKPIs(byMonth) {
+  const { sales, onhold } = getDeals();
+  let totalRaw = 0, totalW = 0;
+  [...sales,...onhold].forEach(d => {
+    totalRaw += parseFloat(d.properties.amount || 0);
+    totalW += parseFloat(d.properties.amount || 0) * getProb(d);
+  });
+  $('kTotalRaw').textContent = fmt(totalRaw);
+  $('kTotalDeals').textContent = (sales.length + onhold.length) + ' deals (' + sales.length + ' sales + ' + onhold.length + ' on-hold)';
+  $('kWeighted').textContent = fmt(totalW);
+
+  let ytd = 0, ytdD = 0;
+  MONTHS.forEach(m => { if (m <= NOW_MONTH) { ytd += byMonth[m].actualWon; ytdD += byMonth[m].wonDeals; } });
+  $('kYTD').textContent = fmt(ytd);
+  $('kYTDSub').textContent = ytdD + ' deals closed YTD';
+
+  const vals = Object.values(HIST_2025);
+  $('kRunRate').textContent = fmt(vals.reduce((a,b)=>a+b,0)/vals.length);
+  $('kAvg').textContent = fmt(HIST.avgDeal);
+  $('kDays').textContent = HIST.avgDays + ' avg days to close';
+  $('kWR').textContent = fmtPct(HIST.winRate);
+}
+
+function renderStages(stageMap) {
+  const totalPipeline = Object.values(stageMap).reduce((a,b)=>a+b.total,0);
+  const el = $('stageGrid'); el.innerHTML = '';
+
+  // Sales stages first, then on-hold
+  const sorted = Object.values(stageMap).sort((a,b) => {
+    if (a.pipeline !== b.pipeline) return a.pipeline === 'sales' ? -1 : 1;
+    return b.total - a.total;
+  });
+
+  sorted.forEach(s => {
+    const pct = totalPipeline ? (s.total/totalPipeline*100).toFixed(0) : 0;
+    const tag = s.pipeline === 'onhold' ? '<span style="font-size:9px;background:#f5f3ff;color:#7c3aed;padding:1px 4px;border-radius:3px;font-weight:600;margin-left:4px;">ON-HOLD</span>' : '';
+    const div = document.createElement('div'); div.className = 'stage-card';
+    div.innerHTML = `<div class="stage-name">${s.name}${tag}</div>
+      <div class="stage-cnt">${s.count}</div>
+      <div class="stage-amt">${fmt(s.total)}</div>
+      <div class="stage-prob">${fmtPct(s.prob)} win rate</div>
+      <div class="stage-bar"><div class="stage-bar-fill" style="width:${pct}%;background:${s.color}"></div></div>`;
+    el.appendChild(div);
+  });
+}
+
+function renderStageTbl(stageMap) {
+  const body = $('saBody'); body.innerHTML = '';
+  const sorted = Object.values(stageMap).sort((a,b) => {
+    if (a.pipeline !== b.pipeline) return a.pipeline === 'sales' ? -1 : 1;
+    return b.prob - a.prob;
+  });
+  sorted.forEach(s => {
+    const color = s.prob>=.7?'#059669':s.prob>=.4?'#d97706':'#6b7280';
+    const bg = s.prob>=.7?'#ecfdf5':s.prob>=.4?'#fffbeb':'#f3f4f6';
+    const tag = s.pipeline==='onhold'?' <span style="font-size:10px;background:#f5f3ff;color:#7c3aed;padding:1px 4px;border-radius:3px;">ON-HOLD</span>':'';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td style="font-weight:500">${s.name}${tag}</td>
+      <td>${fmt(s.total)}</td><td>${s.count}</td>
+      <td><span class="pill" style="background:${bg};color:${color}">${fmtPct(s.prob)}</span></td>
+      <td style="color:var(--t2)">${fmt(HIST.avgDeal*s.prob)}</td>`;
+    body.appendChild(tr);
+  });
+}
+
+function renderTable(byMonth) {
+  const demoVal = HIST.avgDeal * HIST.engagedProb;
+  $('demoVal').textContent = Math.round(demoVal).toLocaleString();
+  $('daysDisplay').textContent = HIST.avgDays;
+  const body = $('tblBody'); body.innerHTML = '';
+
+  MONTHS.forEach((m, i) => {
+    const d = byMonth[m];
+    const target = targets[m] || 0;
+    const total = d.actualWon + d.salesW + d.onholdW;
+    const gap = total - target;
+    const isPast = m < NOW_MONTH, isCurrent = m === NOW_MONTH;
+    const gapCls = gap >= 0 ? 'pos' : 'neg';
+    const gapStr = (gap>=0?'+':'')+fmt(gap);
+    const demosNeeded = gap < 0 ? Math.ceil(Math.abs(gap)/demoVal) : 0;
+
+    // Quarter totals after Mar, Jun, Sep, Dec
+    const isEndQ = ['2026-03','2026-06','2026-09','2026-12'].includes(m);
+
+    const tr = document.createElement('tr');
+    if (isCurrent) tr.className = 'now'; else if (isPast) tr.className = 'past';
+    tr.innerHTML = `
+      <td style="font-weight:${isCurrent?700:500};white-space:nowrap">
+        ${MLBL(m)}${isCurrent?' <span style="font-size:10px;background:#dbeafe;color:#1d4ed8;padding:1px 5px;border-radius:3px;font-weight:700">NOW</span>':''}
+        ${isPast?'<span style="font-size:10px;color:var(--t3)">(closed)</span>':''}
+      </td>
+      <td>${isPast ? fmt(target) : `<input class="t-inp" id="tgt_${m}" type="text" value="${fmtNum(target)}" onchange="autoSave()">`}</td>
+      <td style="color:${d.actualWon>0?'var(--green)':'var(--t3)'}">${d.actualWon>0?fmt(d.actualWon)+'<span style="font-size:11px;color:var(--t3)"> ('+d.wonDeals+')</span>':'--'}</td>
+      <td style="color:var(--t2)">${d.salesW>0?fmt(d.salesW):'--'}</td>
+      <td style="color:#7c3aed">${d.onholdW>0?fmt(d.onholdW):'--'}</td>
+      <td style="font-weight:600">${fmt(total)}</td>
+      <td class="${gapCls}">${gapStr}</td>
+      <td style="color:${gap<0?'var(--red)':'var(--green)'}">${demosNeeded>0?demosNeeded:'<span style="color:var(--green)">✓</span>'}</td>`;
+    body.appendChild(tr);
+
+    // Quarter subtotal row
+    if (isEndQ) {
+      const qIdx = Math.floor(i/3);
+      const qMonths = MONTHS.slice(qIdx*3, qIdx*3+3);
+      let qTarget=0,qActual=0,qSalesW=0,qOnholdW=0;
+      qMonths.forEach(qm => {
+        qTarget += targets[qm]||0;
+        qActual += byMonth[qm].actualWon;
+        qSalesW += byMonth[qm].salesW;
+        qOnholdW += byMonth[qm].onholdW;
+      });
+      const qTotal = qActual+qSalesW+qOnholdW;
+      const qGap = qTotal-qTarget;
+      const qtr = document.createElement('tr'); qtr.className='qsub';
+      qtr.innerHTML=`<td colspan="5" style="color:var(--green);font-weight:700">Q${qIdx+1} 2026 Total</td>
+        <td>${fmt(qTotal)}</td><td class="${qGap>=0?'pos':'neg'}" style="font-weight:700">${(qGap>=0?'+':'')+fmt(qGap)}</td><td></td>`;
+      body.appendChild(qtr);
+    }
+  });
+}
+
+function renderQuarters(byMonth) {
+  const quarters = [
+    {label:'Q1 2026',months:['2026-01','2026-02','2026-03']},
+    {label:'Q2 2026',months:['2026-04','2026-05','2026-06']},
+    {label:'Q3 2026',months:['2026-07','2026-08','2026-09']},
+    {label:'Q4 2026',months:['2026-10','2026-11','2026-12']}
+  ];
+  const demoVal = HIST.avgDeal * HIST.engagedProb;
+  const el = $('qGrid'); el.innerHTML = '';
+  quarters.forEach(q => {
+    let target=0,actual=0,salesW=0,onholdW=0;
+    q.months.forEach(m => { target+=targets[m]||0; actual+=byMonth[m].actualWon; salesW+=byMonth[m].salesW; onholdW+=byMonth[m].onholdW; });
+    const total=actual+salesW+onholdW, gap=total-target;
+    const pct = target>0 ? Math.min(100,Math.round(total/target*100)) : 0;
+    const cls = pct>=90?'ok':pct>=65?'risk':'behind';
+    const demos = gap<0 ? Math.ceil(Math.abs(gap)/demoVal) : 0;
+    const div = document.createElement('div'); div.className='q-card';
+    div.innerHTML=`<div class="q-lbl">${q.label}</div>
+      <div class="q-target">Target: ${fmt(target)}</div>
+      <div class="q-val">${fmt(total)}</div>
+      <span class="q-badge ${cls}">${(gap>=0?'+':'')+fmt(gap)} (${pct}%)</span>
+      <div class="q-prog"><div class="q-prog-fill ${cls}" style="width:${pct}%"></div></div>
+      <div class="q-note">${demos>0?'💬 '+demos+' demos needed':'✓ On track'}</div>`;
+    el.appendChild(div);
+  });
+}
+
+function renderChart(byMonth) {
+  const labels = MONTHS.map(m => MLBL(m).replace(' 2026',''));
+  if (chart) chart.destroy();
+  chart = new Chart($('chart').getContext('2d'), {
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        { label:'Actual Won', data:MONTHS.map(m=>byMonth[m].actualWon), backgroundColor:'rgba(5,150,105,.85)', stack:'s' },
+        { label:'Sales (weighted)', data:MONTHS.map(m=>byMonth[m].salesW), backgroundColor:'rgba(59,130,246,.65)', stack:'s' },
+        { label:'On-Hold (weighted)', data:MONTHS.map(m=>byMonth[m].onholdW), backgroundColor:'rgba(167,139,250,.65)', stack:'s' },
+        { label:'Target', data:MONTHS.map(m=>targets[m]||0), type:'line', borderColor:'#dc2626', borderDash:[5,3], borderWidth:2, pointRadius:3, pointBackgroundColor:'#dc2626', fill:false, stack:undefined }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      scales:{
+        x:{stacked:true,grid:{display:false},ticks:{font:{size:11}}},
+        y:{stacked:true,grid:{color:'#f3f4f6'},ticks:{font:{size:11},callback:v=>'$'+(v>=1000?(v/1000).toFixed(0)+'K':v)}}
+      },
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:c=>`${c.dataset.label}: $${Math.round(c.parsed.y).toLocaleString()}`}}
+      }
+    }
+  });
+}
+
+// ============================================================
+// TARGETS
+// ============================================================
+function loadTargets() {
+  try { const s = localStorage.getItem(TGT_KEY); targets = s ? JSON.parse(s) : {...DEFAULT_TARGETS}; }
+  catch(e) { targets = {...DEFAULT_TARGETS}; }
+}
+function saveTargets() {
+  MONTHS.forEach(m => { const el=$('tgt_'+m); if(el){ targets[m]=parseFloat(el.value.replace(/,/g,''))||0; } });
+  localStorage.setItem(TGT_KEY,JSON.stringify(targets));
+  renderAll();
+  const b=$('saveBtn'); b.textContent='Saved ✓';
+  setTimeout(()=>{ b.textContent='Save Targets'; },1500);
+}
+function resetTargets() {
+  targets={...DEFAULT_TARGETS};
+  localStorage.removeItem(TGT_KEY);
+  MONTHS.forEach(m=>{ const el=$('tgt_'+m); if(el) el.value=fmtNum(DEFAULT_TARGETS[m]); });
+  renderAll();
+}
+function autoSave() {
+  MONTHS.forEach(m=>{ const el=$('tgt_'+m); if(el){ targets[m]=parseFloat(el.value.replace(/,/g,''))||0; } });
+  localStorage.setItem(TGT_KEY,JSON.stringify(targets));
+  renderAll();
+}
+
+// ============================================================
+// TABS
+// ============================================================
+function switchTab(t) {
+  activeTab = t;
+  ['all','sales','onhold'].forEach(id=>{ $('tab-'+id).className='tab'+(id===t?' active':''); });
+  renderAll();
+}
+
+// ============================================================
+// CALC
+// ============================================================
+function calcUpdate() {
+  const gap = parseFloat($('cGap').value)||0;
+  const deal = parseFloat($('cDeal').value)||HIST.avgDeal;
+  const rate = (parseFloat($('cRate').value)||HIST.engagedProb*100)/100;
+  const perDemo = deal*rate;
+  $('cPerDemo').textContent = Math.round(perDemo).toLocaleString();
+  $('cDays').textContent = HIST.avgDays;
+  if (gap>0&&perDemo>0) {
+    const n=Math.ceil(gap/perDemo);
+    $('cResult').textContent=n;
+    $('cDet').textContent=`$${Math.round(gap).toLocaleString()} ÷ $${Math.round(perDemo).toLocaleString()}/demo = ${n} demos`;
+  } else { $('cResult').textContent='--'; $('cDet').textContent='Enter a revenue gap above'; }
+}
+function initCalc() {
+  $('cDeal').value=HIST.avgDeal;
+  $('cRate').value=Math.round(HIST.engagedProb*100);
+  calcUpdate();
+}
+
+// ============================================================
+// RENDER ALL
+// ============================================================
+function renderAll() {
+  const byMonth = buildMonthly();
+  const stageMap = buildStages();
+  renderKPIs(byMonth);
+  renderStages(stageMap);
+  renderStageTbl(stageMap);
+  renderQuarters(byMonth);
+  renderTable(byMonth);
+  renderChart(byMonth);
+  $('ts').textContent = 'Updated '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+}
+
+// ============================================================
+// LOAD & REFRESH
+// ============================================================
+async function initialLoad() {
+  $('loading').style.display='flex';
+  $('refreshBtn').classList.add('spinning');
+  loadTargets();
+  try {
+    await loadData();
+    renderAll();
+    initCalc();
+    setInterval(refresh, 10*60*1000);
+  } catch(err) {
+    $('err').className='err show';
+    $('errTxt').textContent=err.message;
+  }
+  $('loading').style.display='none';
+  $('refreshBtn').classList.remove('spinning');
+}
+
+async function refresh() {
+  const b=$('refreshBtn'); b.classList.add('spinning'); b.disabled=true;
+  try { await loadData(); renderAll(); } catch(e){ $('err').className='err show'; $('errTxt').textContent=e.message; }
+  b.classList.remove('spinning'); b.disabled=false;
+}
+
+document.addEventListener('DOMContentLoaded',initialLoad);
+</script>
+</body>
+</html>

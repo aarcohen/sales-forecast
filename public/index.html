@@ -238,7 +238,8 @@ body { font-family: 'Segoe UI',-apple-system,BlinkMacSystemFont,system-ui,sans-s
     </div>
     <div class="info-note">
       <strong>Demos Needed</strong> = Gap vs forecast ÷ ~$<span id="demoVal">6,539</span>/demo (avg deal $19,233 × 34% win rate). &nbsp;·&nbsp;
-      <strong>Pipeline weighted</strong> = Sales + On-Hold deals × stage probability, by expected close date.
+      <strong>Pipeline weighted</strong> = Sales + On-Hold deals × stage probability, by expected close date. &nbsp;·&nbsp;
+      <strong>Current-month deals</strong> with close dates that were set before the deal is statistically mature (createdate + avg cycle) are shifted to their realistic close month to avoid inflating the current month.
     </div>
   </div>
 
@@ -260,7 +261,7 @@ body { font-family: 'Segoe UI',-apple-system,BlinkMacSystemFont,system-ui,sans-s
       <div class="booking-section">
         <div class="booking-hdr">When to book demos (~<span id="aIntCycleDays">--</span> day avg cycle)</div>
         <table class="booking-tbl">
-          <thead><tr><th>Book by</th><th>Closes in</th><th>Needed</th><th>/month</th><th>Booked</th></tr></thead>
+          <thead><tr><th>Book by</th><th>Closes in</th><th>Needed</th></tr></thead>
           <tbody id="aIntBookingTbl"></tbody>
         </table>
         <div style="font-size:10px;color:var(--t3);margin-top:6px">† 2027 Seed = demos booked by Dec 2026 to replenish pipeline for Jan 2027 (≈ 1 month avg internal target ÷ $<span id="aIntPerDemo">--</span>/demo). Not included in gap total above.</div>
@@ -282,7 +283,7 @@ body { font-family: 'Segoe UI',-apple-system,BlinkMacSystemFont,system-ui,sans-s
       <div class="booking-section">
         <div class="booking-hdr">When to book demos (~<span id="aExtCycleDays">--</span> day avg cycle)</div>
         <table class="booking-tbl">
-          <thead><tr><th>Book by</th><th>Closes in</th><th>Needed</th><th>/month</th><th>Booked</th></tr></thead>
+          <thead><tr><th>Book by</th><th>Closes in</th><th>Needed</th></tr></thead>
           <tbody id="aExtBookingTbl"></tbody>
         </table>
         <div style="font-size:10px;color:var(--t3);margin-top:6px">† 2027 Seed = demos booked by Dec 2026 to replenish pipeline for Jan 2027 (≈ 1 month avg internal target ÷ $<span id="aExtPerDemo">--</span>/demo). Not included in gap total above.</div>
@@ -468,24 +469,45 @@ function buildMonthly() {
   const futureMonths = MONTHS.filter(m => m > NOW_MONTH);
   const futureCount = futureMonths.length;
 
+  // For deals with a current-month close date, use the LATER of:
+  //   (a) their expected_close_date month, or
+  //   (b) createdate + avgDays → their "realistic" close month based on our avg sales cycle
+  // This prevents newly-created deals (too early in the cycle) from inflating the current month.
+  // Deals that ARE old enough (createdate + avgDays ≤ end of current month) stay in March.
+  function assignMonth(deal) {
+    const ecd = deal.properties.expected_close_date;
+    const ecdMonth = ecd ? ecd.substring(0, 7) : null;
+
+    if (!ecdMonth || ecdMonth < NOW_MONTH) return null; // no/stale date → spread
+    if (ecdMonth > NOW_MONTH) return ecdMonth;          // future month → trust it
+
+    // ecdMonth === NOW_MONTH: check if deal is mature enough to close this month
+    const createDate = new Date(deal.properties.createdate);
+    if (!createDate || isNaN(createDate.getTime())) return NOW_MONTH;
+    const realisticClose = new Date(createDate.getTime() + HIST.avgDays * 86400000);
+    const rcMonth = realisticClose.getFullYear() + '-' + String(realisticClose.getMonth()+1).padStart(2,'0');
+    // If avg cycle pushes close past current month, use that realistic month instead
+    if (rcMonth > NOW_MONTH) return rcMonth <= '2026-12' ? rcMonth : null;
+    return NOW_MONTH; // deal is mature enough — keep in current month
+  }
+
   sales.forEach(d => {
-    const m = getCloseMonth(d);
+    const m = assignMonth(d);
     const amt = parseFloat(d.properties.amount || 0);
     const w = amt * getProb(d);
-    if (m && m >= NOW_MONTH && by[m]) {
-      // Future date — assign normally
+    if (m && by[m]) {
       by[m].salesW += w;
     } else {
-      // No date or past date — spread evenly across remaining months
+      // No date, past date, or pushed beyond Dec — spread evenly
       futureMonths.forEach(fm => { by[fm].salesW += w / futureCount; });
     }
   });
 
   onhold.forEach(d => {
-    const m = getCloseMonth(d);
+    const m = assignMonth(d);
     const amt = parseFloat(d.properties.amount || 0);
     const w = amt * getProb(d);
-    if (m && m >= NOW_MONTH && by[m]) {
+    if (m && by[m]) {
       by[m].onholdW += w;
     } else {
       futureMonths.forEach(fm => { by[fm].onholdW += w / futureCount; });
@@ -871,20 +893,14 @@ function renderDemoCalcs(by) {
         <td style="${dlStyle};white-space:nowrap">${row.deadlineLbl}${badge}</td>
         <td style="color:var(--t2)">${row.label}</td>
         <td style="${dStyle}">${qDemos > 0 ? qDemos : '✓'}</td>
-        <td style="${dStyle}">${perMo > 0 ? perMo+'/mo' : '✓'}</td>
-        <td style="${bookedStyle}">${booked}</td>
       </tr>`;
     }).join('') : '';
 
     // 2027 pipeline seed row — always shown, dashed style
-    const seedBooked = seed2027Booked;
-    const seedStyle = seedBooked >= seed2027Demos ? 'color:var(--green);font-weight:600' : 'color:var(--t2)';
     const seedRow = `<tr style="border-top:2px dashed var(--border)">
       <td style="color:var(--t3);font-style:italic;white-space:nowrap">Dec 2026 †</td>
       <td style="color:var(--t3);font-style:italic">2027 Seed</td>
       <td style="color:var(--t3)">${seed2027Demos}</td>
-      <td style="color:var(--t3)">—</td>
-      <td style="${seedStyle}">${seedBooked}</td>
     </tr>`;
 
     return rows + seedRow;

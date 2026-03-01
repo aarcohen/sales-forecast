@@ -131,6 +131,15 @@ body { font-family: 'Segoe UI',-apple-system,BlinkMacSystemFont,system-ui,sans-s
 .auto-row:last-of-type { border-bottom:none; }
 .auto-row span:last-child { font-weight:600; color:var(--t1); }
 
+/* BOOKING TABLE */
+.booking-section { margin-top:14px; }
+.booking-hdr { font-size:10px; font-weight:700; color:var(--t3); text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px; }
+.booking-tbl { width:100%; border-collapse:collapse; font-size:12px; }
+.booking-tbl th { padding:4px 6px; text-align:left; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; color:var(--t3); border-bottom:1px solid var(--border); background:#f9fafb; }
+.booking-tbl td { padding:6px 6px; border-bottom:1px solid #f3f4f6; vertical-align:middle; }
+.booking-tbl tr:last-child td { border-bottom:none; }
+.urgent-tag { font-size:9px; background:#fef2f2; color:var(--red); font-weight:700; padding:1px 4px; border-radius:3px; margin-left:3px; }
+
 /* LOADING */
 .loading { position:fixed; inset:0; background:rgba(255,255,255,.88); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:1000; gap:14px; }
 .spinner { width:32px; height:32px; border:3px solid #e5e7eb; border-top-color:var(--primary); border-radius:50%; animation:spin .8s linear infinite; }
@@ -247,6 +256,13 @@ body { font-family: 'Segoe UI',-apple-system,BlinkMacSystemFont,system-ui,sans-s
         <div class="calc-res-val" id="aIntDemos">--</div>
         <div class="calc-res-det" id="aIntDet">--</div>
       </div>
+      <div class="booking-section">
+        <div class="booking-hdr">When to book demos (~174 day cycle)</div>
+        <table class="booking-tbl">
+          <thead><tr><th>Book by</th><th>Closes in</th><th>Demos needed</th></tr></thead>
+          <tbody id="aIntBookingTbl"></tbody>
+        </table>
+      </div>
       <div class="info-note" style="margin-top:10px">$<span id="aIntPerDemo">--</span>/demo · ~174 days avg close</div>
     </div>
 
@@ -260,6 +276,13 @@ body { font-family: 'Segoe UI',-apple-system,BlinkMacSystemFont,system-ui,sans-s
         <div class="calc-res-lbl">Demos Needed to Close Gap</div>
         <div class="calc-res-val" id="aExtDemos">--</div>
         <div class="calc-res-det" id="aExtDet">--</div>
+      </div>
+      <div class="booking-section">
+        <div class="booking-hdr">When to book demos (~174 day cycle)</div>
+        <table class="booking-tbl">
+          <thead><tr><th>Book by</th><th>Closes in</th><th>Demos needed</th></tr></thead>
+          <tbody id="aExtBookingTbl"></tbody>
+        </table>
       </div>
       <div class="info-note" style="margin-top:10px">$<span id="aExtPerDemo">--</span>/demo · ~174 days avg close</div>
     </div>
@@ -419,16 +442,34 @@ function buildMonthly() {
   const by = {};
   MONTHS.forEach(m => { by[m] = { salesW:0, onholdW:0, actualWon:0, wonDeals:0 }; });
 
+  // Future months (current + upcoming) — stale deals get redistributed here
+  const futureMonths = MONTHS.filter(m => m >= NOW_MONTH);
+  const futureCount = futureMonths.length;
+
   sales.forEach(d => {
-    const m = getCloseMonth(d); if (!m || !by[m]) return;
+    const m = getCloseMonth(d);
     const amt = parseFloat(d.properties.amount || 0);
-    by[m].salesW += amt * getProb(d);
+    const w = amt * getProb(d);
+    if (m && m >= NOW_MONTH && by[m]) {
+      // Future date — assign normally
+      by[m].salesW += w;
+    } else {
+      // No date or past date — spread evenly across remaining months
+      futureMonths.forEach(fm => { by[fm].salesW += w / futureCount; });
+    }
   });
+
   onhold.forEach(d => {
-    const m = getCloseMonth(d); if (!m || !by[m]) return;
+    const m = getCloseMonth(d);
     const amt = parseFloat(d.properties.amount || 0);
-    by[m].onholdW += amt * getProb(d);
+    const w = amt * getProb(d);
+    if (m && m >= NOW_MONTH && by[m]) {
+      by[m].onholdW += w;
+    } else {
+      futureMonths.forEach(fm => { by[fm].onholdW += w / futureCount; });
+    }
   });
+
   wonDeals.forEach(d => {
     const p = d.properties;
     if (!p.amount || !p.closedate) return;
@@ -718,7 +759,42 @@ function renderDemoCalcs(by) {
   });
   const totalCombined = totalActual + totalPipeline;
 
-  function fillAutoCalc(prefix, target, combined) {
+  // Quarterly booking timeline
+  // 174-day avg cycle ≈ 6 months: demo booked in month M → closes ~month M+6
+  // Q3 (Jul–Sep): book by Jan–Mar → last chance is Mar 2026 (NOW) ⚡
+  // Q4 (Oct–Dec): book by Apr–Jun 2026
+  const bookingRows = [
+    { bookBy:'Mar 2026', closesIn:'Q3 2026', months:['2026-07','2026-08','2026-09'], urgent:true },
+    { bookBy:'Jun 2026', closesIn:'Q4 2026', months:['2026-10','2026-11','2026-12'], urgent:false }
+  ];
+
+  function buildBookingRows(forecastObj) {
+    return bookingRows.map(row => {
+      let qForecast = 0, qCombined = 0;
+      row.months.forEach(m => {
+        qForecast += forecastObj[m] || 0;
+        qCombined += by[m].actualWon + by[m].salesW + by[m].onholdW;
+      });
+      const qGap = qForecast - qCombined;
+      const qDemos = qGap > 0 ? Math.ceil(qGap / demoVal) : 0;
+      const urgentBadge = row.urgent
+        ? `<span class="urgent-tag">NOW</span>`
+        : '';
+      const bookByStyle = row.urgent
+        ? 'font-weight:700;color:var(--red)'
+        : 'font-weight:500;color:var(--t1)';
+      const demosStyle = qDemos > 0
+        ? 'font-weight:600;color:var(--blue)'
+        : 'font-weight:600;color:var(--green)';
+      return `<tr>
+        <td style="${bookByStyle};white-space:nowrap">${row.bookBy}${urgentBadge}</td>
+        <td style="color:var(--t2)">${row.closesIn}</td>
+        <td style="${demosStyle}">${qDemos > 0 ? qDemos + ' demos' : '✓ on track'}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function fillAutoCalc(prefix, target, combined, forecastObj) {
     const gap = target - combined;
     const demos = gap > 0 ? Math.ceil(gap / demoVal) : 0;
     $(prefix+'Target').textContent = fmt(target);
@@ -733,10 +809,13 @@ function renderDemoCalcs(by) {
       ? `${fmt(gap)} gap ÷ ${fmt(demoVal)}/demo = ${demos} demos`
       : 'Ahead of target — no demos needed';
     $(prefix+'PerDemo').textContent = Math.round(demoVal).toLocaleString();
+    // Quarterly booking breakdown
+    const tbl = $(prefix+'BookingTbl');
+    if (tbl) tbl.innerHTML = buildBookingRows(forecastObj);
   }
 
-  fillAutoCalc('aInt', intTotal, totalCombined);
-  fillAutoCalc('aExt', extTotal, totalCombined);
+  fillAutoCalc('aInt', intTotal, totalCombined, INTERNAL_FORECAST);
+  fillAutoCalc('aExt', extTotal, totalCombined, EXTERNAL_FORECAST);
 }
 
 // ============================================================

@@ -239,7 +239,7 @@ body { font-family: 'Segoe UI',-apple-system,BlinkMacSystemFont,system-ui,sans-s
     <div class="info-note">
       <strong>Demos Needed</strong> = Gap vs forecast ÷ ~$<span id="demoVal">6,539</span>/demo (avg deal $19,233 × 34% win rate). &nbsp;·&nbsp;
       <strong>Pipeline weighted</strong> = Sales + On-Hold deals × stage probability, by expected close date. &nbsp;·&nbsp;
-      <strong>Current-month deals</strong> with close dates that were set before the deal is statistically mature (createdate + avg cycle) are shifted to their realistic close month to avoid inflating the current month.
+      <strong>Current-month deals</strong> only count toward the current month if their avg-cycle-based close (createdate + avg days) also falls in the current month — roughly deals created in the prior ~30-day window. All others (overdue or too early in cycle) move to April.
     </div>
   </div>
 
@@ -377,17 +377,30 @@ let fChart = null;
 // ============================================================
 // API
 // ============================================================
+const sleep = ms => new Promise(res => setTimeout(res, ms));
+
 async function searchAll(filterGroups, props, maxPages = 20) {
   let results = [], after = 0;
   for (let p = 0; p < maxPages; p++) {
-    const r = await fetch(`${BASE_URL}/crm/v3/objects/deals/search`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filterGroups, properties: props, limit: 100, after })
-    });
+    // Retry loop for 429 rate-limit responses
+    let r, retries = 0;
+    while (true) {
+      r = await fetch(`${BASE_URL}/crm/v3/objects/deals/search`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filterGroups, properties: props, limit: 100, after })
+      });
+      if (r.status !== 429) break;
+      retries++;
+      if (retries > 5) throw new Error('HubSpot rate limit — too many retries');
+      await sleep(Math.min(1000 * Math.pow(2, retries), 16000)); // 2s, 4s, 8s, 16s…
+    }
     if (!r.ok) throw new Error(`HubSpot ${r.status}: ${r.statusText}`);
     const d = await r.json();
     if (d.results) results = results.concat(d.results);
-    if (d.paging?.next?.after) after = d.paging.next.after; else break;
+    if (d.paging?.next?.after) {
+      after = d.paging.next.after;
+      await sleep(300); // small pause between pages to stay under 4 req/s
+    } else break;
   }
   return results;
 }
@@ -396,21 +409,21 @@ const DEAL_PROPS = ['dealname','dealstage','amount','expected_close_date','close
                     'hs_deal_stage_probability','createdate','pipeline'];
 
 async function loadData() {
-  // Core data — must all succeed
-  [salesDeals, onholdDeals, wonDeals] = await Promise.all([
-    searchAll([{ filters: [
-      { propertyName:'pipeline', operator:'EQ', value:'default' },
-      { propertyName:'dealstage', operator:'NOT_IN', values:['closedwon','closedlost'] }
-    ]}], DEAL_PROPS),
-    searchAll([{ filters: [
-      { propertyName:'pipeline', operator:'EQ', value:'74755476' },
-      { propertyName:'dealstage', operator:'NOT_IN', values:['172962924'] }
-    ]}], DEAL_PROPS),
-    searchAll([{ filters: [
-      { propertyName:'dealstage', operator:'EQ', value:'closedwon' },
-      { propertyName:'closedate', operator:'GTE', value:'2026-01-01' }
-    ]}], ['dealname','amount','closedate','createdate','pipeline'])
-  ]);
+  // Run sequentially to avoid bursting HubSpot's 4 req/s search-API rate limit
+  salesDeals = await searchAll([{ filters: [
+    { propertyName:'pipeline', operator:'EQ', value:'default' },
+    { propertyName:'dealstage', operator:'NOT_IN', values:['closedwon','closedlost'] }
+  ]}], DEAL_PROPS);
+
+  onholdDeals = await searchAll([{ filters: [
+    { propertyName:'pipeline', operator:'EQ', value:'74755476' },
+    { propertyName:'dealstage', operator:'NOT_IN', values:['172962924'] }
+  ]}], DEAL_PROPS);
+
+  wonDeals = await searchAll([{ filters: [
+    { propertyName:'dealstage', operator:'EQ', value:'closedwon' },
+    { propertyName:'closedate', operator:'GTE', value:'2026-01-01' }
+  ]}], ['dealname','amount','closedate','createdate','pipeline']);
 
   // Qualified demos booked: Sales Pipeline deals that moved past "Open Deal"
   // stage (i.e., had a demo) and were created in 2026. Non-blocking — won't
@@ -469,26 +482,28 @@ function buildMonthly() {
   const futureMonths = MONTHS.filter(m => m > NOW_MONTH);
   const futureCount = futureMonths.length;
 
-  // For deals with a current-month close date, use the LATER of:
-  //   (a) their expected_close_date month, or
-  //   (b) createdate + avgDays → their "realistic" close month based on our avg sales cycle
-  // This prevents newly-created deals (too early in the cycle) from inflating the current month.
-  // Deals that ARE old enough (createdate + avgDays ≤ end of current month) stay in March.
+  const nextMonthKey = futureMonths[0]; // April — where displaced March deals land
+
+  // For deals dated in the current month: only stay in March if createdate + avgDays
+  // also lands in March (the deal is mid-cycle right now).
+  // Overdue deals (cycle expired) AND too-new deals BOTH go to April specifically.
+  // Future-dated deals are trusted as-is. No-date/past-date deals spread across Apr-Dec.
   function assignMonth(deal) {
     const ecd = deal.properties.expected_close_date;
     const ecdMonth = ecd ? ecd.substring(0, 7) : null;
 
-    if (!ecdMonth || ecdMonth < NOW_MONTH) return null; // no/stale date → spread
-    if (ecdMonth > NOW_MONTH) return ecdMonth;          // future month → trust it
+    if (!ecdMonth || ecdMonth < NOW_MONTH) return null; // no/past date → spread Apr–Dec
+    if (ecdMonth > NOW_MONTH) return ecdMonth;           // future date → trust it
 
-    // ecdMonth === NOW_MONTH: check if deal is mature enough to close this month
+    // ecdMonth === NOW_MONTH: validate with avg cycle
     const createDate = new Date(deal.properties.createdate);
-    if (!createDate || isNaN(createDate.getTime())) return NOW_MONTH;
+    if (!createDate || isNaN(createDate.getTime())) return null;
     const realisticClose = new Date(createDate.getTime() + HIST.avgDays * 86400000);
     const rcMonth = realisticClose.getFullYear() + '-' + String(realisticClose.getMonth()+1).padStart(2,'0');
-    // If avg cycle pushes close past current month, use that realistic month instead
-    if (rcMonth > NOW_MONTH) return rcMonth <= '2026-12' ? rcMonth : null;
-    return NOW_MONTH; // deal is mature enough — keep in current month
+    // Keep in March ONLY if the avg cycle also puts the close in March
+    // (createdate roughly Jan 17 – Feb 16 for a 43-day cycle)
+    // Everything else — overdue deals and too-new deals alike — goes to April
+    return rcMonth === NOW_MONTH ? NOW_MONTH : nextMonthKey;
   }
 
   sales.forEach(d => {

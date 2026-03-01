@@ -162,8 +162,8 @@ body { font-family: 'Segoe UI',-apple-system,BlinkMacSystemFont,system-ui,sans-s
     <div class="kpi"><div class="kpi-lbl">YTD Actual Won</div><div class="kpi-val" id="kYTD">--</div><div class="kpi-sub" id="kYTDSub">-- deals closed</div></div>
     <div class="kpi"><div class="kpi-lbl">YTD vs External Forecast</div><div class="kpi-val" id="kVsExt">--</div><div class="kpi-sub" id="kVsExtSub">--</div></div>
     <div class="kpi"><div class="kpi-lbl">YTD vs Internal Forecast</div><div class="kpi-val" id="kVsInt">--</div><div class="kpi-sub" id="kVsIntSub">--</div></div>
-    <div class="kpi"><div class="kpi-lbl">Full-Year External Forecast</div><div class="kpi-val" id="kExtTotal">--</div><div class="kpi-sub">Pipeline covers <span id="kExtCoverage">--</span></div></div>
-    <div class="kpi"><div class="kpi-lbl">Full-Year Internal Forecast</div><div class="kpi-val" id="kIntTotal">--</div><div class="kpi-sub">Pipeline covers <span id="kIntCoverage">--</span></div></div>
+    <div class="kpi"><div class="kpi-lbl">Full-Year External Forecast</div><div class="kpi-val" id="kExtTotal">--</div><div class="kpi-sub">Wtd. pipeline covers <span id="kExtCoverage">--</span></div></div>
+    <div class="kpi"><div class="kpi-lbl">Full-Year Internal Forecast</div><div class="kpi-val" id="kIntTotal">--</div><div class="kpi-sub">Wtd. pipeline covers <span id="kIntCoverage">--</span></div></div>
     <div class="kpi"><div class="kpi-lbl">Weighted Pipeline (2026)</div><div class="kpi-val" id="kWeighted">--</div><div class="kpi-sub" id="kWeightedSub">-- open deals</div></div>
   </div>
 
@@ -280,21 +280,15 @@ const SALES_STAGES = {
 };
 
 const ONHOLD_STAGES = {
-  '49229958':  { name:'Onboarding Call Needed', prob:0.50, color:'#c084fc' },
-  '48047015':  { name:'4–7 Mo Until Renewal',   prob:0.22, color:'#f0abfc' },
-  '50036082':  { name:'Auto Renews 1–3 Mo',     prob:0.70, color:'#e879f9' },
-  '48045191':  { name:'Contract Exp 1–3 Mo',    prob:0.35, color:'#d946ef' },
-  '50036084':  { name:'Contract Exp <1 Mo',     prob:0.45, color:'#a21caf' },
-  '50036083':  { name:'Auto Renews <1 Mo',      prob:0.72, color:'#86198f' },
-  '171385759': { name:'Follow Up',              prob:0.18, color:'#fb923c' },
-  '171384698': { name:'1 Month',                prob:0.25, color:'#fb923c' },
-  '171384699': { name:'2 Months',               prob:0.22, color:'#f97316' },
-  '171384700': { name:'3 Months',               prob:0.20, color:'#ea580c' },
-  '171384701': { name:'4 Months',               prob:0.18, color:'#c2410c' },
-  '171384702': { name:'5 Months',               prob:0.16, color:'#9a3412' },
-  '171384703': { name:'6 Months',               prob:0.14, color:'#7c2d12' },
-  '204182442': { name:'No Follow Up Task',      prob:0.08, color:'#9ca3af' },
-  '172962924': { name:'Lost (On-Hold)',          prob:0.00, color:'#dc2626' }
+  '171385759': { name:'Follow Up',         prob:0.20, color:'#fb923c' },
+  '171384698': { name:'1 Month',           prob:0.20, color:'#fdba74' },
+  '171384699': { name:'2 Months',          prob:0.20, color:'#f97316' },
+  '171384700': { name:'3 Months',          prob:0.20, color:'#ea580c' },
+  '171384701': { name:'4 Months',          prob:0.20, color:'#c2410c' },
+  '171384702': { name:'5 Months',          prob:0.20, color:'#9a3412' },
+  '171384703': { name:'6 Months',          prob:0.20, color:'#7c2d12' },
+  '204182442': { name:'No Follow Up Task', prob:0.10, color:'#9ca3af' },
+  '172962924': { name:'Lost (On-Hold)',    prob:0.00, color:'#dc2626' }
 };
 
 const ALL_STAGES = { ...SALES_STAGES, ...ONHOLD_STAGES };
@@ -348,8 +342,8 @@ async function loadData() {
       { propertyName:'dealstage', operator:'NOT_IN', values:['closedwon','closedlost'] }
     ]}], DEAL_PROPS),
     searchAll([{ filters: [
-      { propertyName:'pipeline', operator:'EQ', value:'19702358' },
-      { propertyName:'dealstage', operator:'NOT_IN', values:['48045192','48045193','172962924'] }
+      { propertyName:'pipeline', operator:'EQ', value:'74755476' },
+      { propertyName:'dealstage', operator:'NOT_IN', values:['172962924'] }
     ]}], DEAL_PROPS),
     searchAll([{ filters: [
       { propertyName:'dealstage', operator:'EQ', value:'closedwon' },

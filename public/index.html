@@ -395,7 +395,8 @@ const DEAL_PROPS = ['dealname','dealstage','amount','expected_close_date','close
                     'hs_deal_stage_probability','createdate','pipeline'];
 
 async function loadData() {
-  [salesDeals, onholdDeals, wonDeals, demoDeals] = await Promise.all([
+  // Core data — must all succeed
+  [salesDeals, onholdDeals, wonDeals] = await Promise.all([
     searchAll([{ filters: [
       { propertyName:'pipeline', operator:'EQ', value:'default' },
       { propertyName:'dealstage', operator:'NOT_IN', values:['closedwon','closedlost'] }
@@ -407,13 +408,22 @@ async function loadData() {
     searchAll([{ filters: [
       { propertyName:'dealstage', operator:'EQ', value:'closedwon' },
       { propertyName:'closedate', operator:'GTE', value:'2026-01-01' }
-    ]}], ['dealname','amount','closedate','createdate','pipeline']),
-    // All Sales Pipeline deals that entered Engaged Deal stage in 2026 = "Qualified Demos"
-    searchAll([{ filters: [
-      { propertyName:'pipeline', operator:'EQ', value:'default' },
-      { propertyName:'hs_date_entered_220338057', operator:'GTE', value:'2026-01-01' }
-    ]}], ['dealname','hs_date_entered_220338057','dealstage'])
+    ]}], ['dealname','amount','closedate','createdate','pipeline'])
   ]);
+
+  // Qualified demos booked: Sales Pipeline deals that moved past "Open Deal"
+  // stage (i.e., had a demo) and were created in 2026. Non-blocking — won't
+  // crash the dashboard if unavailable.
+  try {
+    demoDeals = await searchAll([{ filters: [
+      { propertyName:'pipeline', operator:'EQ', value:'default' },
+      { propertyName:'createdate', operator:'GTE', value:'2026-01-01' },
+      { propertyName:'dealstage', operator:'NOT_IN', values:['215276379','closedlost'] }
+    ]}], ['dealname','createdate','dealstage']);
+  } catch(e) {
+    console.warn('Qualified demo data unavailable:', e.message);
+    demoDeals = [];
+  }
 }
 
 // ============================================================
@@ -760,10 +770,12 @@ function renderTable(by) {
 // DEMOS BOOKED BY MONTH (deals entering Engaged Deal stage)
 // ============================================================
 function buildDemosByMonth() {
+  // Count deals that moved past "Open Deal" (i.e., qualified demo occurred)
+  // by their createdate month — best available proxy without hs_date_entered_*
   const by = {};
   MONTHS.forEach(m => { by[m] = 0; });
   demoDeals.forEach(d => {
-    const dt = d.properties.hs_date_entered_220338057;
+    const dt = d.properties.createdate;
     if (!dt) return;
     const m = dt.substring(0, 7); // 'YYYY-MM'
     if (by[m] !== undefined) by[m]++;

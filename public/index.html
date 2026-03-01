@@ -366,7 +366,11 @@ const MLBL = m => {
 };
 
 const NOW_MONTH = '2026-03';
-const BASE_URL = '/api';
+// When embedded in Mission Control (or any non-sales-forecast host), use the
+// absolute URL so API calls reach the correct HubSpot proxy on Vercel.
+const BASE_URL = (location.hostname === 'localhost' || location.hostname.includes('sales-forecast'))
+  ? '/api'
+  : 'https://sales-forecast-beta.vercel.app/api';
 
 // ============================================================
 // STATE
@@ -959,8 +963,8 @@ function renderDemoCalcs(by) {
     demosEl.textContent = totalDemos > 0 ? totalDemos : '✓';
     demosEl.style.color = totalDemos > 0 ? 'var(--blue)' : 'var(--green)';
     $(prefix+'Det').textContent = gap > 0
-      ? `${fmt(gap)} gap ÷ ${fmt(demoVal)}/demo = ${gapDemos} + ${seed2027Demos} 2027 seed† = ${totalDemos}`
-      : `${seed2027Demos} demos for 2027 Q1 pipeline seed†`;
+      ? `${gapDemos} to close 2026 gap + ${seed2027Demos} to seed 2027 pipeline†`
+      : `${seed2027Demos} demos to seed 2027 Q1 pipeline†`;
     $(prefix+'Rate').textContent = demosPerMo > 0
       ? `= ${demosPerMo} demos/month (${remainingMonths} months remaining)`
       : '';
@@ -1033,6 +1037,8 @@ async function initialLoad() {
   }
   $('loading').style.display = 'none';
   $('refreshBtn').classList.remove('spinning');
+  // Signal parent frame (Mission Control) that the dashboard is fully loaded
+  try { window.parent.postMessage({ type: 'ready', source: 'sales-forecast' }, '*'); } catch(_) {}
 }
 
 async function doRefresh() {

@@ -237,7 +237,7 @@ body { font-family: 'Segoe UI',-apple-system,BlinkMacSystemFont,system-ui,sans-s
       </table>
     </div>
     <div class="info-note">
-      <strong>Demos Needed</strong> = Largest gap ÷ ~$<span id="demoVal">6,539</span>/demo (avg deal $19,233 × 34% Engaged win rate). &nbsp;·&nbsp;
+      <strong>Demos Needed</strong> = Gap vs forecast ÷ ~$<span id="demoVal">6,539</span>/demo (avg deal $19,233 × 34% win rate). &nbsp;·&nbsp;
       <strong>Pipeline weighted</strong> = Sales + On-Hold deals × stage probability, by expected close date.
     </div>
   </div>
@@ -247,7 +247,7 @@ body { font-family: 'Segoe UI',-apple-system,BlinkMacSystemFont,system-ui,sans-s
 
     <!-- Auto: vs Internal Forecast -->
     <div class="card">
-      <div class="sec-hdr">Gap vs Internal Forecast <span style="font-size:10px;font-weight:400;color:var(--t3)">auto-calculated</span></div>
+      <div class="sec-hdr">Gap vs Internal Forecast</div>
       <div class="auto-row"><span>Full-Year Target</span><span id="aIntTarget">--</span></div>
       <div class="auto-row"><span>Actual + Wtd. Pipeline</span><span id="aIntCurrent">--</span></div>
       <div class="auto-row" style="padding-top:8px"><span style="font-weight:600;color:var(--t1)">Gap</span><span id="aIntGapLbl" style="font-size:15px">--</span></div>
@@ -255,20 +255,21 @@ body { font-family: 'Segoe UI',-apple-system,BlinkMacSystemFont,system-ui,sans-s
         <div class="calc-res-lbl">Demos Needed to Close Gap</div>
         <div class="calc-res-val" id="aIntDemos">--</div>
         <div class="calc-res-det" id="aIntDet">--</div>
+        <div class="calc-res-det" id="aIntRate" style="margin-top:3px;color:#93c5fd"></div>
       </div>
       <div class="booking-section">
-        <div class="booking-hdr">When to book demos (~174 day cycle)</div>
+        <div class="booking-hdr">When to book demos (~<span id="aIntCycleDays">--</span> day avg cycle)</div>
         <table class="booking-tbl">
-          <thead><tr><th>Book by</th><th>Closes in</th><th>Demos needed</th></tr></thead>
+          <thead><tr><th>Book by</th><th>Closes in</th><th>Needed</th><th>/month</th><th>Booked</th></tr></thead>
           <tbody id="aIntBookingTbl"></tbody>
         </table>
+        <div style="font-size:10px;color:var(--t3);margin-top:6px">† 2027 Seed = demos booked by Dec 2026 to replenish pipeline for Jan 2027 (≈ 1 month avg internal target ÷ $<span id="aIntPerDemo">--</span>/demo). Not included in gap total above.</div>
       </div>
-      <div class="info-note" style="margin-top:10px">$<span id="aIntPerDemo">--</span>/demo · ~174 days avg close</div>
     </div>
 
     <!-- Auto: vs External Forecast -->
     <div class="card">
-      <div class="sec-hdr">Gap vs External Forecast <span style="font-size:10px;font-weight:400;color:var(--t3)">auto-calculated</span></div>
+      <div class="sec-hdr">Gap vs External Forecast</div>
       <div class="auto-row"><span>Full-Year Target</span><span id="aExtTarget">--</span></div>
       <div class="auto-row"><span>Actual + Wtd. Pipeline</span><span id="aExtCurrent">--</span></div>
       <div class="auto-row" style="padding-top:8px"><span style="font-weight:600;color:var(--t1)">Gap</span><span id="aExtGapLbl" style="font-size:15px">--</span></div>
@@ -276,15 +277,16 @@ body { font-family: 'Segoe UI',-apple-system,BlinkMacSystemFont,system-ui,sans-s
         <div class="calc-res-lbl">Demos Needed to Close Gap</div>
         <div class="calc-res-val" id="aExtDemos">--</div>
         <div class="calc-res-det" id="aExtDet">--</div>
+        <div class="calc-res-det" id="aExtRate" style="margin-top:3px;color:#93c5fd"></div>
       </div>
       <div class="booking-section">
-        <div class="booking-hdr">When to book demos (~174 day cycle)</div>
+        <div class="booking-hdr">When to book demos (~<span id="aExtCycleDays">--</span> day avg cycle)</div>
         <table class="booking-tbl">
-          <thead><tr><th>Book by</th><th>Closes in</th><th>Demos needed</th></tr></thead>
+          <thead><tr><th>Book by</th><th>Closes in</th><th>Needed</th><th>/month</th><th>Booked</th></tr></thead>
           <tbody id="aExtBookingTbl"></tbody>
         </table>
+        <div style="font-size:10px;color:var(--t3);margin-top:6px">† 2027 Seed = demos booked by Dec 2026 to replenish pipeline for Jan 2027 (≈ 1 month avg internal target ÷ $<span id="aExtPerDemo">--</span>/demo). Not included in gap total above.</div>
       </div>
-      <div class="info-note" style="margin-top:10px">$<span id="aExtPerDemo">--</span>/demo · ~174 days avg close</div>
     </div>
 
     <!-- Manual Calculator -->
@@ -368,7 +370,7 @@ const BASE_URL = '/api';
 // ============================================================
 // STATE
 // ============================================================
-let salesDeals = [], onholdDeals = [], wonDeals = [];
+let salesDeals = [], onholdDeals = [], wonDeals = [], demoDeals = [];
 let fChart = null;
 
 // ============================================================
@@ -393,7 +395,7 @@ const DEAL_PROPS = ['dealname','dealstage','amount','expected_close_date','close
                     'hs_deal_stage_probability','createdate','pipeline'];
 
 async function loadData() {
-  [salesDeals, onholdDeals, wonDeals] = await Promise.all([
+  [salesDeals, onholdDeals, wonDeals, demoDeals] = await Promise.all([
     searchAll([{ filters: [
       { propertyName:'pipeline', operator:'EQ', value:'default' },
       { propertyName:'dealstage', operator:'NOT_IN', values:['closedwon','closedlost'] }
@@ -405,7 +407,12 @@ async function loadData() {
     searchAll([{ filters: [
       { propertyName:'dealstage', operator:'EQ', value:'closedwon' },
       { propertyName:'closedate', operator:'GTE', value:'2026-01-01' }
-    ]}], ['dealname','amount','closedate','pipeline'])
+    ]}], ['dealname','amount','closedate','createdate','pipeline']),
+    // All Sales Pipeline deals that entered Engaged Deal stage in 2026 = "Qualified Demos"
+    searchAll([{ filters: [
+      { propertyName:'pipeline', operator:'EQ', value:'default' },
+      { propertyName:'hs_date_entered_220338057', operator:'GTE', value:'2026-01-01' }
+    ]}], ['dealname','hs_date_entered_220338057','dealstage'])
   ]);
 }
 
@@ -413,7 +420,12 @@ async function loadData() {
 // HELPERS
 // ============================================================
 const $ = id => document.getElementById(id);
-const fmt = n => n == null || isNaN(n) ? '--' : Math.abs(n) >= 1e6 ? '$'+(n/1e6).toFixed(2)+'M' : '$'+Math.round(n).toLocaleString();
+const fmt = n => {
+  if (n == null || isNaN(n)) return '--';
+  const neg = n < 0, abs = Math.abs(n);
+  const s = abs >= 1e6 ? '$'+(abs/1e6).toFixed(2)+'M' : '$'+Math.round(abs).toLocaleString();
+  return neg ? '('+s+')' : s;
+};
 const fmtPct = n => (n*100).toFixed(0)+'%';
 const fmtNum = n => Math.round(n).toLocaleString();
 
@@ -442,8 +454,8 @@ function buildMonthly() {
   const by = {};
   MONTHS.forEach(m => { by[m] = { salesW:0, onholdW:0, actualWon:0, wonDeals:0 }; });
 
-  // Future months (current + upcoming) — stale deals get redistributed here
-  const futureMonths = MONTHS.filter(m => m >= NOW_MONTH);
+  // Stale deals spread across next month onward (exclude current month — it's already in progress)
+  const futureMonths = MONTHS.filter(m => m > NOW_MONTH);
   const futureCount = futureMonths.length;
 
   sales.forEach(d => {
@@ -592,7 +604,7 @@ function renderStageTbl(stageMap) {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td style="font-weight:500">${s.name}</td><td>${s.count}</td><td>${fmt(s.total)}</td>
       <td><span class="pill" style="background:${bg};color:${color}">${fmtPct(s.prob)}</span></td>
-      <td style="color:var(--t2)">${fmt(HIST.avgDeal*s.prob)}</td>`;
+      <td style="color:var(--t2)">${fmt(s.total*s.prob)}</td>`;
     body.appendChild(tr);
   });
 
@@ -745,12 +757,41 @@ function renderTable(by) {
 }
 
 // ============================================================
+// DEMOS BOOKED BY MONTH (deals entering Engaged Deal stage)
+// ============================================================
+function buildDemosByMonth() {
+  const by = {};
+  MONTHS.forEach(m => { by[m] = 0; });
+  demoDeals.forEach(d => {
+    const dt = d.properties.hs_date_entered_220338057;
+    if (!dt) return;
+    const m = dt.substring(0, 7); // 'YYYY-MM'
+    if (by[m] !== undefined) by[m]++;
+  });
+  return by;
+}
+
+// ============================================================
+// AVG DAYS TO CLOSE (computed from live wonDeals data)
+// ============================================================
+function computeAvgDays() {
+  const days = wonDeals.map(d => {
+    const c = new Date(d.properties.createdate);
+    const cl = new Date(d.properties.closedate);
+    return (cl - c) / 86400000;
+  }).filter(d => d >= 1 && d <= 365); // exclude same-day and >1-year outliers
+  return days.length ? Math.round(days.reduce((a,b) => a+b,0) / days.length) : 45;
+}
+
+// ============================================================
 // AUTO DEMO CALCS
 // ============================================================
 function renderDemoCalcs(by) {
   const demoVal = HIST.avgDeal * HIST.engagedProb;
+  const avgDays = HIST.avgDays; // set dynamically in renderAll()
   const intTotal = Object.values(INTERNAL_FORECAST).reduce((a,b)=>a+b,0);
   const extTotal = Object.values(EXTERNAL_FORECAST).reduce((a,b)=>a+b,0);
+  const demosByMonth = buildDemosByMonth();
 
   let totalActual = 0, totalPipeline = 0;
   MONTHS.forEach(m => {
@@ -759,17 +800,47 @@ function renderDemoCalcs(by) {
   });
   const totalCombined = totalActual + totalPipeline;
 
-  // Quarterly booking timeline
-  // 174-day avg cycle ≈ 6 months: demo booked in month M → closes ~month M+6
-  // Q3 (Jul–Sep): book by Jan–Mar → last chance is Mar 2026 (NOW) ⚡
-  // Q4 (Oct–Dec): book by Apr–Jun 2026
-  const bookingRows = [
-    { bookBy:'Mar 2026', closesIn:'Q3 2026', months:['2026-07','2026-08','2026-09'], urgent:true },
-    { bookBy:'Jun 2026', closesIn:'Q4 2026', months:['2026-10','2026-11','2026-12'], urgent:false }
+  // Remaining months this year (for overall demos/month rate)
+  const remainingMonths = MONTHS.filter(m => m >= NOW_MONTH).length; // Mar–Dec = 10
+
+  // Helper: count months from NOW_MONTH to target key, inclusive
+  function moSpan(toKey) {
+    const [ty, tm] = toKey.split('-').map(Number);
+    const [ny, nm] = NOW_MONTH.split('-').map(Number);
+    return Math.max(1, (ty - ny) * 12 + (tm - nm) + 1);
+  }
+  // Sum demos booked from a start key to an end key inclusive
+  function demosInWindow(fromKey, toKey) {
+    return MONTHS.filter(m => m >= fromKey && m <= toKey).reduce((a,m) => a + (demosByMonth[m]||0), 0);
+  }
+
+  // Build dynamic quarterly booking rows:
+  // Latest date to BOOK a demo to close within a quarter = quarter end − avgDays
+  const quarters = [
+    { label:'Q2 2026', months:['2026-04','2026-05','2026-06'], end: new Date('2026-06-30') },
+    { label:'Q3 2026', months:['2026-07','2026-08','2026-09'], end: new Date('2026-09-30') },
+    { label:'Q4 2026', months:['2026-10','2026-11','2026-12'], end: new Date('2026-12-31') }
   ];
 
+  const bookingRows = quarters.map(q => {
+    const dl = new Date(q.end);
+    dl.setDate(dl.getDate() - avgDays);
+    const yr = dl.getFullYear(), mo = dl.getMonth() + 1;
+    const key = yr + '-' + String(mo).padStart(2,'0');
+    const lbl = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][mo-1] + ' ' + yr;
+    return { ...q, deadlineKey: key, deadlineLbl: lbl,
+             isPast: key < NOW_MONTH, isNow: key === NOW_MONTH };
+  }).filter(r => !r.isPast);
+
+  // 2027 pipeline seed: demos needed to generate 1 month of Jan 2027 revenue
+  // Booked by Dec 2026 (avgDays before Jan 31, 2027)
+  const seed2027Target = Math.round(Object.values(INTERNAL_FORECAST).reduce((a,b)=>a+b,0) / 12); // 1 avg month of internal
+  const seed2027Demos = Math.ceil(seed2027Target / demoVal);
+  const seed2027DeadlineKey = '2026-12';
+  const seed2027Booked = demosInWindow(NOW_MONTH, seed2027DeadlineKey);
+
   function buildBookingRows(forecastObj) {
-    return bookingRows.map(row => {
+    const rows = bookingRows.length ? bookingRows.map(row => {
       let qForecast = 0, qCombined = 0;
       row.months.forEach(m => {
         qForecast += forecastObj[m] || 0;
@@ -777,30 +848,44 @@ function renderDemoCalcs(by) {
       });
       const qGap = qForecast - qCombined;
       const qDemos = qGap > 0 ? Math.ceil(qGap / demoVal) : 0;
-      const urgentBadge = row.urgent
-        ? `<span class="urgent-tag">NOW</span>`
-        : '';
-      const bookByStyle = row.urgent
-        ? 'font-weight:700;color:var(--red)'
-        : 'font-weight:500;color:var(--t1)';
-      const demosStyle = qDemos > 0
-        ? 'font-weight:600;color:var(--blue)'
-        : 'font-weight:600;color:var(--green)';
+      const winMos = moSpan(row.deadlineKey);
+      const perMo = qDemos > 0 ? Math.ceil(qDemos / winMos) : 0;
+      const booked = demosInWindow(NOW_MONTH, row.deadlineKey);
+      const badge = row.isNow ? `<span class="urgent-tag">NOW</span>` : '';
+      const dlStyle = row.isNow ? 'font-weight:700;color:var(--red)' : 'font-weight:500;color:var(--t1)';
+      const dStyle = qDemos > 0 ? 'font-weight:600;color:var(--blue)' : 'font-weight:600;color:var(--green)';
+      const bookedStyle = booked >= qDemos ? 'color:var(--green);font-weight:600' : 'color:var(--t2)';
       return `<tr>
-        <td style="${bookByStyle};white-space:nowrap">${row.bookBy}${urgentBadge}</td>
-        <td style="color:var(--t2)">${row.closesIn}</td>
-        <td style="${demosStyle}">${qDemos > 0 ? qDemos + ' demos' : '✓ on track'}</td>
+        <td style="${dlStyle};white-space:nowrap">${row.deadlineLbl}${badge}</td>
+        <td style="color:var(--t2)">${row.label}</td>
+        <td style="${dStyle}">${qDemos > 0 ? qDemos : '✓'}</td>
+        <td style="${dStyle}">${perMo > 0 ? perMo+'/mo' : '✓'}</td>
+        <td style="${bookedStyle}">${booked}</td>
       </tr>`;
-    }).join('');
+    }).join('') : '';
+
+    // 2027 pipeline seed row — always shown, dashed style
+    const seedBooked = seed2027Booked;
+    const seedStyle = seedBooked >= seed2027Demos ? 'color:var(--green);font-weight:600' : 'color:var(--t2)';
+    const seedRow = `<tr style="border-top:2px dashed var(--border)">
+      <td style="color:var(--t3);font-style:italic;white-space:nowrap">Dec 2026 †</td>
+      <td style="color:var(--t3);font-style:italic">2027 Seed</td>
+      <td style="color:var(--t3)">${seed2027Demos}</td>
+      <td style="color:var(--t3)">—</td>
+      <td style="${seedStyle}">${seedBooked}</td>
+    </tr>`;
+
+    return rows + seedRow;
   }
 
   function fillAutoCalc(prefix, target, combined, forecastObj) {
     const gap = target - combined;
     const demos = gap > 0 ? Math.ceil(gap / demoVal) : 0;
+    const demosPerMo = demos > 0 ? Math.ceil(demos / remainingMonths) : 0;
     $(prefix+'Target').textContent = fmt(target);
     $(prefix+'Current').textContent = fmt(combined);
     const gapEl = $(prefix+'GapLbl');
-    gapEl.textContent = (gap > 0 ? '-' : '+') + fmt(Math.abs(gap));
+    gapEl.textContent = gap > 0 ? fmt(-gap) : '+' + fmt(gap);
     gapEl.style.color = gap > 0 ? 'var(--red)' : 'var(--green)';
     const demosEl = $(prefix+'Demos');
     demosEl.textContent = gap > 0 ? demos : '✓';
@@ -808,8 +893,11 @@ function renderDemoCalcs(by) {
     $(prefix+'Det').textContent = gap > 0
       ? `${fmt(gap)} gap ÷ ${fmt(demoVal)}/demo = ${demos} demos`
       : 'Ahead of target — no demos needed';
+    $(prefix+'Rate').textContent = demosPerMo > 0
+      ? `= ${demosPerMo} demos/month (${remainingMonths} months remaining)`
+      : '';
     $(prefix+'PerDemo').textContent = Math.round(demoVal).toLocaleString();
-    // Quarterly booking breakdown
+    $(prefix+'CycleDays').textContent = avgDays;
     const tbl = $(prefix+'BookingTbl');
     if (tbl) tbl.innerHTML = buildBookingRows(forecastObj);
   }
@@ -845,6 +933,7 @@ function initCalc() {
 // RENDER ALL
 // ============================================================
 function renderAll() {
+  HIST.avgDays = computeAvgDays(); // live from HubSpot closed-won data
   const by = buildMonthly();
   const stages = buildStages();
   renderKPIs(by);

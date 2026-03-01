@@ -239,7 +239,7 @@ body { font-family: 'Segoe UI',-apple-system,BlinkMacSystemFont,system-ui,sans-s
     <div class="info-note">
       <strong>Demos Needed</strong> = Gap vs forecast ÷ ~$<span id="demoVal">6,539</span>/demo (avg deal $19,233 × 34% win rate). &nbsp;·&nbsp;
       <strong>Pipeline weighted</strong> = Sales + On-Hold deals × stage probability, by expected close date. &nbsp;·&nbsp;
-      <strong>Current-month deals</strong> stay in the current month only if createdate + avg cycle also lands this month. Too-new deals go to their exact future month; overdue deals (cycle expired) spread evenly across Q2 (Apr–Jun).
+      <strong>Current-month deals</strong>: mature-stage deals (Trial+, ≥45%) keep their close date; early-stage deals (Open/Engaged, &lt;45%) are validated against the avg cycle — overdue ones spread across Q2 (Apr–Jun), too-new ones shift to their realistic future month.
     </div>
   </div>
 
@@ -264,7 +264,7 @@ body { font-family: 'Segoe UI',-apple-system,BlinkMacSystemFont,system-ui,sans-s
           <thead><tr><th>Book by</th><th>Closes in</th><th>Needed</th></tr></thead>
           <tbody id="aIntBookingTbl"></tbody>
         </table>
-        <div style="font-size:10px;color:var(--t3);margin-top:6px">† 2027 Seed = demos booked by Dec 2026 to replenish pipeline for Jan 2027 (≈ 1 month avg internal target ÷ $<span id="aIntPerDemo">--</span>/demo). Not included in gap total above.</div>
+        <div style="font-size:10px;color:var(--t3);margin-top:6px">† 2027 Seed = demos booked in Q4 that close in Q1 2027 (~<span id="aIntCycleDays2">--</span>-day avg cycle × avg monthly rate ÷ $<span id="aIntPerDemo">--</span>/demo). Included in Demos Needed total above.</div>
       </div>
     </div>
 
@@ -286,7 +286,7 @@ body { font-family: 'Segoe UI',-apple-system,BlinkMacSystemFont,system-ui,sans-s
           <thead><tr><th>Book by</th><th>Closes in</th><th>Needed</th></tr></thead>
           <tbody id="aExtBookingTbl"></tbody>
         </table>
-        <div style="font-size:10px;color:var(--t3);margin-top:6px">† 2027 Seed = demos booked by Dec 2026 to replenish pipeline for Jan 2027 (≈ 1 month avg internal target ÷ $<span id="aExtPerDemo">--</span>/demo). Not included in gap total above.</div>
+        <div style="font-size:10px;color:var(--t3);margin-top:6px">† 2027 Seed = demos booked in Q4 that close in Q1 2027 (~<span id="aExtCycleDays2">--</span>-day avg cycle × avg monthly rate ÷ $<span id="aExtPerDemo">--</span>/demo). Included in Demos Needed total above.</div>
       </div>
     </div>
 
@@ -485,13 +485,20 @@ function buildMonthly() {
   // Q2 months — overdue March deals spread here (nearest realistic horizon)
   const q2Months = ['2026-04', '2026-05', '2026-06'];
 
-  // For current-month-dated deals, three cases:
-  //  1. createdate + avgDays lands in March → keep in March (deal is genuinely on track)
-  //  2. createdate + avgDays > March (too new) → assign to that specific future month
-  //     (e.g. created Feb 20 + 43d = April → April; created Feb 28 + 43d = mid-April → April)
-  //  3. createdate + avgDays < March (overdue — cycle already expired) → spread evenly
-  //     across Q2 (April, May, June) as the nearest defensible horizon
-  // Future-dated deals trusted as-is. No-date/past-date deals spread across Apr–Dec.
+  // For current-month-dated deals, two tiers by stage:
+  //
+  //  TIER 1 — Mature stage (prob ≥ 45%: Trial, Decision Maker, Negotiation, Contract Review):
+  //    Trust the close date. A deal that has progressed this far has an intentionally
+  //    set date; the rep is actively working it toward close this month.
+  //
+  //  TIER 2 — Early stage (prob < 45%: Open Deal 18%, Engaged 34%):
+  //    Apply avg-cycle validation. These dates are often auto-populated or stale.
+  //    Sub-cases based on createdate + avgDays:
+  //      a) Cycle lands in March → keep (deal is genuinely mid-cycle)
+  //      b) Cycle lands in a future month → assign to that specific month
+  //      c) Cycle already expired (overdue) → spread evenly across Q2 (Apr/May/Jun)
+  //
+  // Future-dated deals always trusted as-is. No-date/past-date → spread Apr–Dec.
   function assignMonth(deal) {
     const ecd = deal.properties.expected_close_date;
     const ecdMonth = ecd ? ecd.substring(0, 7) : null;
@@ -499,15 +506,19 @@ function buildMonthly() {
     if (!ecdMonth || ecdMonth < NOW_MONTH) return null; // no/past date → spread Apr–Dec
     if (ecdMonth > NOW_MONTH) return ecdMonth;           // future date → trust it
 
-    // ecdMonth === NOW_MONTH: validate with avg cycle
+    // ecdMonth === NOW_MONTH
+    const prob = getProb(deal);
+    if (prob >= 0.45) return NOW_MONTH; // Tier 1: mature stage — trust the date
+
+    // Tier 2: early stage — validate with avg cycle
     const createDate = new Date(deal.properties.createdate);
     if (!createDate || isNaN(createDate.getTime())) return 'Q2_SPREAD';
     const realisticClose = new Date(createDate.getTime() + HIST.avgDays * 86400000);
     const rcMonth = realisticClose.getFullYear() + '-' + String(realisticClose.getMonth()+1).padStart(2,'0');
 
-    if (rcMonth === NOW_MONTH) return NOW_MONTH;                        // case 1: on track for March
-    if (rcMonth > NOW_MONTH) return rcMonth <= '2026-12' ? rcMonth : null; // case 2: specific future month
-    return 'Q2_SPREAD';                                                 // case 3: overdue → spread Q2
+    if (rcMonth === NOW_MONTH) return NOW_MONTH;                           // cycle confirms March
+    if (rcMonth > NOW_MONTH) return rcMonth <= '2026-12' ? rcMonth : null; // too new → future month
+    return 'Q2_SPREAD';                                                    // overdue → spread Q2
   }
 
   sales.forEach(d => {
@@ -886,9 +897,17 @@ function renderDemoCalcs(by) {
              isPast: key < NOW_MONTH, isNow: key === NOW_MONTH };
   }).filter(r => !r.isPast);
 
-  // 2027 pipeline seed: demos needed to generate 1 month of Jan 2027 revenue
-  // Booked by Dec 2026 (avgDays before Jan 31, 2027)
-  const seed2027Target = Math.round(Object.values(INTERNAL_FORECAST).reduce((a,b)=>a+b,0) / 12); // 1 avg month of internal
+  // 2027 pipeline seed: demos needed to replenish the portion of Q1 2027 that can
+  // realistically be seeded by Q4 2026 bookings, factoring in the avg sales cycle.
+  //
+  // Logic: demos booked after the Q4 closing deadline (Dec 31 − avgDays) won't close
+  // in Q4 — they close in Q1 2027 instead. Those "post-deadline" Q4 days = avgDays days.
+  // Seed target = avgDays days of Q1 2027 revenue at the avg monthly internal rate.
+  //   e.g. avgDays=50 → ~1.7 months of Q1 2027 = ~$562K → ~86 demos
+  //
+  // This avoids seeding the entire 2027 pipeline and stays proportional to cycle length.
+  const avgMonthlyInternal = Object.values(INTERNAL_FORECAST).reduce((a,b)=>a+b,0) / 12;
+  const seed2027Target = Math.round(avgMonthlyInternal / 30 * avgDays);
   const seed2027Demos = Math.ceil(seed2027Target / demoVal);
   const seed2027DeadlineKey = '2026-12';
   const seed2027Booked = demosInWindow(NOW_MONTH, seed2027DeadlineKey);
@@ -928,24 +947,27 @@ function renderDemoCalcs(by) {
 
   function fillAutoCalc(prefix, target, combined, forecastObj) {
     const gap = target - combined;
-    const demos = gap > 0 ? Math.ceil(gap / demoVal) : 0;
-    const demosPerMo = demos > 0 ? Math.ceil(demos / remainingMonths) : 0;
+    const gapDemos = gap > 0 ? Math.ceil(gap / demoVal) : 0;
+    const totalDemos = gapDemos + seed2027Demos;
+    const demosPerMo = totalDemos > 0 ? Math.ceil(totalDemos / remainingMonths) : 0;
     $(prefix+'Target').textContent = fmt(target);
     $(prefix+'Current').textContent = fmt(combined);
     const gapEl = $(prefix+'GapLbl');
     gapEl.textContent = gap > 0 ? fmt(-gap) : '+' + fmt(gap);
     gapEl.style.color = gap > 0 ? 'var(--red)' : 'var(--green)';
     const demosEl = $(prefix+'Demos');
-    demosEl.textContent = gap > 0 ? demos : '✓';
-    demosEl.style.color = gap > 0 ? 'var(--blue)' : 'var(--green)';
+    demosEl.textContent = totalDemos > 0 ? totalDemos : '✓';
+    demosEl.style.color = totalDemos > 0 ? 'var(--blue)' : 'var(--green)';
     $(prefix+'Det').textContent = gap > 0
-      ? `${fmt(gap)} gap ÷ ${fmt(demoVal)}/demo = ${demos} demos`
-      : 'Ahead of target — no demos needed';
+      ? `${fmt(gap)} gap ÷ ${fmt(demoVal)}/demo = ${gapDemos} + ${seed2027Demos} 2027 seed† = ${totalDemos}`
+      : `${seed2027Demos} demos for 2027 Q1 pipeline seed†`;
     $(prefix+'Rate').textContent = demosPerMo > 0
       ? `= ${demosPerMo} demos/month (${remainingMonths} months remaining)`
       : '';
     $(prefix+'PerDemo').textContent = Math.round(demoVal).toLocaleString();
     $(prefix+'CycleDays').textContent = avgDays;
+    const cd2 = $(prefix+'CycleDays2');
+    if (cd2) cd2.textContent = avgDays;
     const tbl = $(prefix+'BookingTbl');
     if (tbl) tbl.innerHTML = buildBookingRows(forecastObj);
   }

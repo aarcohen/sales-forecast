@@ -1061,6 +1061,16 @@ async function doRefresh() {
   b.classList.remove('spinning'); b.disabled = false;
 }
 
+// Fire DASHBOARD_READY immediately so Mission Control's "Loading agent..." overlay
+// clears right away — the dashboard's own spinner handles the HubSpot loading state.
+// Also retry after 1s and 3s in case the IframeModal listener wasn't attached yet.
+(function signalReady() {
+  const send = () => { try { window.parent.postMessage({ type: 'DASHBOARD_READY' }, '*'); } catch(_) {} };
+  send();
+  setTimeout(send, 1000);
+  setTimeout(send, 3000);
+})();
+
 document.addEventListener('DOMContentLoaded', initialLoad);
 </script>
 </body>

@@ -1,8 +1,7 @@
 const HUBSPOT_TOKEN = process.env.HUBSPOT_TOKEN;
 
-// Module-level response cache — persists across requests within the same
-// Vercel function instance (warm lambda). Prevents repeat 429s when Mission
-// Control pre-loads the iframe and then the user opens it.
+// Module-level response cache — persists within a warm Vercel Lambda instance.
+// Prevents re-hitting HubSpot when Mission Control pre-loads then the user opens.
 const cache = new Map();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -24,8 +23,6 @@ function setCors(res, origin) {
   return true;
 }
 
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-
 module.exports = async function handler(req, res) {
   try {
     const origin = req.headers.origin;
@@ -38,7 +35,7 @@ module.exports = async function handler(req, res) {
     const hubspotUrl = `https://api.hubapi.com${hubspotPath}`;
     const body = req.method === 'POST' && req.body ? JSON.stringify(req.body) : undefined;
 
-    // Check cache first — avoids hammering HubSpot on double-loads
+    // Check cache first — avoids repeat HubSpot calls on double-loads
     const cacheKey = `${req.method}:${hubspotUrl}:${body || ''}`;
     const cached = cache.get(cacheKey);
     if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
@@ -52,19 +49,11 @@ module.exports = async function handler(req, res) {
     };
     if (body) opts.body = body;
 
-    // Retry loop — handle 429 rate-limit responses before returning to client
-    let r, retries = 0;
-    while (true) {
-      r = await fetch(hubspotUrl, opts);
-      if (r.status !== 429) break;
-      retries++;
-      if (retries > 4) break; // return 429 to client after 4 retries (~30s)
-      await sleep(Math.min(1000 * Math.pow(2, retries), 16000)); // 2s, 4s, 8s, 16s
-    }
-
+    // Simple passthrough — no proxy-side retry (avoids Vercel function timeouts).
+    // The client handles 429 retry with exponential backoff.
+    const r = await fetch(hubspotUrl, opts);
     const data = await r.json();
 
-    // Cache successful GET/POST responses
     if (r.status === 200) {
       cache.set(cacheKey, { data, ts: Date.now() });
     }

@@ -396,14 +396,14 @@ async function searchAll(filterGroups, props, maxPages = 20) {
       if (r.status !== 429) break;
       retries++;
       if (retries > 5) throw new Error('HubSpot rate limit — too many retries');
-      await sleep(Math.min(1000 * Math.pow(2, retries), 16000)); // 2s, 4s, 8s, 16s…
+      await sleep(Math.min(2000 * Math.pow(2, retries), 30000)); // 4s, 8s, 16s, 30s…
     }
     if (!r.ok) throw new Error(`HubSpot ${r.status}: ${r.statusText}`);
     const d = await r.json();
     if (d.results) results = results.concat(d.results);
     if (d.paging?.next?.after) {
       after = d.paging.next.after;
-      await sleep(300); // small pause between pages to stay under 4 req/s
+      await sleep(600); // 600ms between pages keeps rate well under 4 req/s
     } else break;
   }
   return results;
@@ -412,26 +412,38 @@ async function searchAll(filterGroups, props, maxPages = 20) {
 const DEAL_PROPS = ['dealname','dealstage','amount','expected_close_date','closedate',
                     'hs_deal_stage_probability','createdate','pipeline'];
 
+// Deduplication guard — if loadData() is already in flight (e.g. Mission Control
+// double-loading the iframe), wait for the first call to finish instead of
+// firing a second burst of HubSpot requests that would trigger 429s.
+let _loadDataPromise = null;
 async function loadData() {
-  // Run sequentially to avoid bursting HubSpot's 4 req/s search-API rate limit
+  if (_loadDataPromise) return _loadDataPromise;
+  _loadDataPromise = _doLoadData().finally(() => { _loadDataPromise = null; });
+  return _loadDataPromise;
+}
+
+async function _doLoadData() {
+  // Run sequentially with pauses to stay under HubSpot's 4 req/s search limit
   salesDeals = await searchAll([{ filters: [
     { propertyName:'pipeline', operator:'EQ', value:'default' },
     { propertyName:'dealstage', operator:'NOT_IN', values:['closedwon','closedlost'] }
   ]}], DEAL_PROPS);
+  await sleep(600);
 
   onholdDeals = await searchAll([{ filters: [
     { propertyName:'pipeline', operator:'EQ', value:'74755476' },
     { propertyName:'dealstage', operator:'NOT_IN', values:['172962924'] }
   ]}], DEAL_PROPS);
+  await sleep(600);
 
   wonDeals = await searchAll([{ filters: [
     { propertyName:'dealstage', operator:'EQ', value:'closedwon' },
     { propertyName:'closedate', operator:'GTE', value:'2026-01-01' }
   ]}], ['dealname','amount','closedate','createdate','pipeline']);
+  await sleep(600);
 
   // Qualified demos booked: Sales Pipeline deals that moved past "Open Deal"
-  // stage (i.e., had a demo) and were created in 2026. Non-blocking — won't
-  // crash the dashboard if unavailable.
+  // stage (i.e., had a demo) and were created in 2026. Non-blocking.
   try {
     demoDeals = await searchAll([{ filters: [
       { propertyName:'pipeline', operator:'EQ', value:'default' },

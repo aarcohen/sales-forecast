@@ -396,14 +396,15 @@ async function searchAll(filterGroups, props, maxPages = 20) {
       if (r.status !== 429) break;
       retries++;
       if (retries > 5) throw new Error('HubSpot rate limit — too many retries');
-      await sleep(Math.min(2000 * Math.pow(2, retries), 30000)); // 4s, 8s, 16s, 30s…
+      // Wait at least 10s on first retry (full HubSpot rate-limit window)
+      await sleep(Math.max(10000, Math.min(5000 * Math.pow(2, retries - 1), 60000)));
     }
     if (!r.ok) throw new Error(`HubSpot ${r.status}: ${r.statusText}`);
     const d = await r.json();
     if (d.results) results = results.concat(d.results);
     if (d.paging?.next?.after) {
       after = d.paging.next.after;
-      await sleep(600); // 600ms between pages keeps rate well under 4 req/s
+      await sleep(1000); // 1s between pages → max 1 req/s per query
     } else break;
   }
   return results;
@@ -423,24 +424,24 @@ async function loadData() {
 }
 
 async function _doLoadData() {
-  // Run sequentially with pauses to stay under HubSpot's 4 req/s search limit
+  // Fully sequential with generous pauses — HubSpot search API: 4 req/s hard limit
   salesDeals = await searchAll([{ filters: [
     { propertyName:'pipeline', operator:'EQ', value:'default' },
     { propertyName:'dealstage', operator:'NOT_IN', values:['closedwon','closedlost'] }
   ]}], DEAL_PROPS);
-  await sleep(600);
+  await sleep(2000);
 
   onholdDeals = await searchAll([{ filters: [
     { propertyName:'pipeline', operator:'EQ', value:'74755476' },
     { propertyName:'dealstage', operator:'NOT_IN', values:['172962924'] }
   ]}], DEAL_PROPS);
-  await sleep(600);
+  await sleep(2000);
 
   wonDeals = await searchAll([{ filters: [
     { propertyName:'dealstage', operator:'EQ', value:'closedwon' },
     { propertyName:'closedate', operator:'GTE', value:'2026-01-01' }
   ]}], ['dealname','amount','closedate','createdate','pipeline']);
-  await sleep(600);
+  await sleep(2000);
 
   // Qualified demos booked: Sales Pipeline deals that moved past "Open Deal"
   // stage (i.e., had a demo) and were created in 2026. Non-blocking.

@@ -1037,8 +1037,9 @@ async function initialLoad() {
   }
   $('loading').style.display = 'none';
   $('refreshBtn').classList.remove('spinning');
-  // Signal parent frame (Mission Control) that the dashboard is fully loaded
-  try { window.parent.postMessage({ type: 'ready', source: 'sales-forecast' }, '*'); } catch(_) {}
+  // Signal Mission Control's IframeModal that the dashboard is fully loaded.
+  // IframeModal listens for { type: 'DASHBOARD_READY' } to hide its loading overlay.
+  try { window.parent.postMessage({ type: 'DASHBOARD_READY' }, '*'); } catch(_) {}
 }
 
 async function doRefresh() {
